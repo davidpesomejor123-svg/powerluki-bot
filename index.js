@@ -1,3 +1,14 @@
+require('dotenv').config();
+// index.js
+const { 
+    Client, 
+    GatewayIntentBits, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    ChannelType, 
+    PermissionsBitField 
 // index.js
 const { 
     Client, 
@@ -334,4 +345,5 @@ client.on('messageCreate', async message => {
 // --------------------------------------
 // Login del bot
 // --------------------------------------
+
 client.login(process.env.TOKEN);
