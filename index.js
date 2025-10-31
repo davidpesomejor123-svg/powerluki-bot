@@ -43,13 +43,17 @@ client.once('ready', async () => {
         guildInvites.set(guild.id, new Map(firstInvites.map(i => [i.code, i.uses])));
     });
 
-    // Mensaje de tickets
+    // Mensaje de tickets solo si no existe
     const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets' && ch.type === ChannelType.GuildText);
     if (ticketChannel) {
-        const embed = new EmbedBuilder()
-            .setColor('#00BFFF')
-            .setTitle('⚠️ Sistema de Tickets | Power Luki Studios ⚠️')
-            .setDescription(`
+        const fetchedMessages = await ticketChannel.messages.fetch({ limit: 50 });
+        const botMessageExists = fetchedMessages.some(msg => msg.author.id === client.user.id);
+
+        if (!botMessageExists) {
+            const embed = new EmbedBuilder()
+                .setColor('#00BFFF')
+                .setTitle('⚠️ Sistema de Tickets | Power Luki Studios ⚠️')
+                .setDescription(`
 💠 Tickets inactivos serán cerrados pasados los 3 días 💠
 
 ⚙️ **Soporte**: Ayuda general o asistencia en el servidor  
@@ -60,17 +64,18 @@ client.once('ready', async () => {
 💠 No abrir ticket innecesariamente 💠
 
 ⬇️ Selecciona el tipo de ticket que deseas crear:
-            `);
+                `);
 
-        const buttons = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder().setCustomId('ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success)
-            );
+            const buttons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder().setCustomId('ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId('ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId('ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId('ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success)
+                );
 
-        ticketChannel.send({ embeds: [embed], components: [buttons] });
+            ticketChannel.send({ embeds: [embed], components: [buttons] });
+        }
     }
 });
 
@@ -210,13 +215,13 @@ const commands = [
         )
 ].map(command => command.toJSON());
 
-// Registrar comando (global, disponible en todo el servidor)
+// Registrar comando (global)
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
         await rest.put(
-            Routes.applicationCommands('1433313752488607821'), // ID de tu bot
+            Routes.applicationCommands('1433313752488607821'),
             { body: commands }
         );
         console.log('Comandos de slash actualizados.');
@@ -225,18 +230,20 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     }
 })();
 
-// Manejo de la interacción de sugerencias
+// Manejo de la interacción de sugerencias con defer
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'sugerir') {
+        await interaction.deferReply({ ephemeral: true });
+
         const suggestion = interaction.options.getString('mensaje');
 
         const suggestionChannel = interaction.guild.channels.cache.find(
             ch => ch.name === '『📃』sugerencias' && ch.type === ChannelType.GuildText
         );
         if (!suggestionChannel) {
-            return interaction.reply({ content: '❌ No se encontró el canal de sugerencias.', ephemeral: true });
+            return interaction.editReply({ content: '❌ No se encontró el canal de sugerencias.' });
         }
 
         const embed = new EmbedBuilder()
@@ -249,12 +256,16 @@ client.on('interactionCreate', async interaction => {
             )
             .setFooter({ text: 'Power Luki Network • Sugerencias' });
 
-        const msg = await suggestionChannel.send({ embeds: [embed] });
+        try {
+            const msg = await suggestionChannel.send({ embeds: [embed] });
+            await msg.react('✅');
+            await msg.react('❌');
 
-        await msg.react('✅');
-        await msg.react('❌');
-
-        await interaction.reply({ content: '✅ Tu sugerencia ha sido enviada al canal de sugerencias.', ephemeral: true });
+            await interaction.editReply({ content: '✅ Tu sugerencia ha sido enviada al canal de sugerencias.' });
+        } catch (err) {
+            console.error(err);
+            await interaction.editReply({ content: '❌ Ocurrió un error al enviar la sugerencia.' });
+        }
     }
 });
 
