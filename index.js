@@ -1,10 +1,6 @@
 // index.js
 import 'dotenv/config'; // Equivalente a require('dotenv').config()
 import fs from 'fs';
-import banConfig from './banConfig.json' assert { type: 'json' };
-import invitesFile from './invites.json' assert { type: 'json' };
-let invites = { ...invitesFile }; // Archivo de invites
-
 import { 
     Client, 
     GatewayIntentBits, 
@@ -18,6 +14,10 @@ import {
     REST,
     Routes
 } from 'discord.js';
+
+// Cargar JSON usando fs para compatibilidad con Render.com
+let banConfig = JSON.parse(fs.readFileSync('./banConfig.json', 'utf8'));
+let invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
 
 const guildInvites = new Map();
 
@@ -87,7 +87,6 @@ client.on('messageCreate', message => {
 // Bienvenida personalizada
 // --------------------------------------
 client.on('guildMemberAdd', async member => {
-    // Canal de bienvenida
     const channel = member.guild.channels.cache.find(ch => ch.name === '『👋』bienvenidos' && ch.type === ChannelType.GuildText);
     if (channel) {
         const embed = new EmbedBuilder()
