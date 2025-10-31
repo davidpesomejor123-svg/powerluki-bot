@@ -1,6 +1,11 @@
-require('dotenv').config();
 // index.js
-const { 
+import 'dotenv/config'; // Equivalente a require('dotenv').config()
+import fs from 'fs';
+import banConfig from './banConfig.json' assert { type: 'json' };
+import invitesFile from './invites.json' assert { type: 'json' };
+let invites = { ...invitesFile }; // Archivo de invites
+
+import { 
     Client, 
     GatewayIntentBits, 
     EmbedBuilder, 
@@ -8,21 +13,12 @@ const {
     ButtonBuilder, 
     ButtonStyle, 
     ChannelType, 
-    PermissionsBitField 
-// index.js
-const { 
-    Client, 
-    GatewayIntentBits, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    ChannelType, 
-    PermissionsBitField 
-} = require('discord.js');
-const fs = require('fs');
-const banConfig = require('./banConfig.json');
-let invites = require('./invites.json'); // Archivo de invites
+    PermissionsBitField,
+    SlashCommandBuilder,
+    REST,
+    Routes
+} from 'discord.js';
+
 const guildInvites = new Map();
 
 // Inicialización del cliente
@@ -48,7 +44,7 @@ client.once('ready', async () => {
     });
 
     // Mensaje de tickets
-    const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets' && ch.type === 0);
+    const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets' && ch.type === ChannelType.GuildText);
     if (ticketChannel) {
         const embed = new EmbedBuilder()
             .setColor('#00BFFF')
@@ -92,7 +88,7 @@ client.on('messageCreate', message => {
 // --------------------------------------
 client.on('guildMemberAdd', async member => {
     // Canal de bienvenida
-    const channel = member.guild.channels.cache.find(ch => ch.name === '『👋』bienvenidos' && ch.type === 0);
+    const channel = member.guild.channels.cache.find(ch => ch.name === '『👋』bienvenidos' && ch.type === ChannelType.GuildText);
     if (channel) {
         const embed = new EmbedBuilder()
             .setColor('#8A2BE2')
@@ -135,7 +131,7 @@ client.on('guildMemberAdd', async member => {
         fs.writeFileSync('./invites.json', JSON.stringify(invites, null, 2));
     }
 
-    const inviteChannel = member.guild.channels.cache.find(ch => ch.name === '『🗓』invitaciones' && ch.type === 0);
+    const inviteChannel = member.guild.channels.cache.find(ch => ch.name === '『🗓』invitaciones' && ch.type === ChannelType.GuildText);
     if (inviteChannel) {
         const embedInv = new EmbedBuilder()
             .setColor('#FFD700')
@@ -155,7 +151,7 @@ client.on('guildMemberAdd', async member => {
 // Despedida personalizada
 // --------------------------------------
 client.on('guildMemberRemove', member => {
-    const channel = member.guild.channels.cache.find(ch => ch.name === '『😔』despedidas' && ch.type === 0);
+    const channel = member.guild.channels.cache.find(ch => ch.name === '『😔』despedidas' && ch.type === ChannelType.GuildText);
     if (!channel) return;
 
     const embed = new EmbedBuilder()
@@ -204,10 +200,6 @@ client.on('interactionCreate', async interaction => {
 // --------------------------------------
 // Sistema de Sugerencias
 // --------------------------------------
-const { SlashCommandBuilder } = require('discord.js');
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord.js');
-
 const commands = [
     new SlashCommandBuilder()
         .setName('sugerir')
@@ -220,7 +212,7 @@ const commands = [
 ].map(command => command.toJSON());
 
 // Registrar comando (global, disponible en todo el servidor)
-const rest = new REST({ version: '10' }).setToken('');
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
@@ -234,22 +226,20 @@ const rest = new REST({ version: '10' }).setToken('');
     }
 })();
 
-// Manejo de la interacción
+// Manejo de la interacción de sugerencias
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'sugerir') {
         const suggestion = interaction.options.getString('mensaje');
 
-        // Canal específico de sugerencias
         const suggestionChannel = interaction.guild.channels.cache.find(
-            ch => ch.name === '『📃』sugerencias' && ch.type === 0
+            ch => ch.name === '『📃』sugerencias' && ch.type === ChannelType.GuildText
         );
         if (!suggestionChannel) {
             return interaction.reply({ content: '❌ No se encontró el canal de sugerencias.', ephemeral: true });
         }
 
-        // Crear embed
         const embed = new EmbedBuilder()
             .setColor('#00FF00')
             .setTitle('📢 Nueva Sugerencia')
@@ -260,14 +250,11 @@ client.on('interactionCreate', async interaction => {
             )
             .setFooter({ text: 'Power Luki Network • Sugerencias' });
 
-        // Enviar al canal de sugerencias
         const msg = await suggestionChannel.send({ embeds: [embed] });
 
-        // Reacciones de votación
         await msg.react('✅');
         await msg.react('❌');
 
-        // Confirmación al usuario
         await interaction.reply({ content: '✅ Tu sugerencia ha sido enviada al canal de sugerencias.', ephemeral: true });
     }
 });
@@ -306,7 +293,7 @@ client.on('messageCreate', async message => {
                 .setFooter({ text: 'Power Luki Network • Registro de baneos' })
                 .setTimestamp();
 
-            const logChannel = message.guild.channels.cache.find(ch => ch.name === '『🔨』baneos' && ch.type === 0);
+            const logChannel = message.guild.channels.cache.find(ch => ch.name === '『🔨』baneos' && ch.type === ChannelType.GuildText);
             if (logChannel) logChannel.send({ embeds: [logEmbed] });
 
             // Guardar en JSON
@@ -345,5 +332,4 @@ client.on('messageCreate', async message => {
 // --------------------------------------
 // Login del bot
 // --------------------------------------
-
 client.login(process.env.TOKEN);
