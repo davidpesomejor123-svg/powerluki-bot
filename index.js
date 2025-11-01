@@ -279,6 +279,87 @@ client.on('messageCreate', async message => {
     }
 });
 
+///// EVENTO: _-_ SISTEMA DE NIVELES _-_ /////
+
+import fs from 'fs';
+import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
+import 'dotenv/config';
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ]
+});
+
+// ============================
+// Cargar niveles
+// ============================
+let levels = { users: {} };
+if (fs.existsSync('./levels.json')) {
+    levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
+}
+
+function saveLevels() {
+    fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
+}
+
+// ============================
+// Variables de XP
+// ============================
+const MIN_XP = 10;
+const MAX_XP = 20;
+
+// ============================
+// Evento mensaje
+// ============================
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+
+    const userId = message.author.id;
+
+    if (!levels.users[userId]) {
+        levels.users[userId] = { xp: 0, level: 1 };
+    }
+
+    const xp = Math.floor(Math.random() * (MAX_XP - MIN_XP + 1)) + MIN_XP;
+    levels.users[userId].xp += xp;
+
+    const xpToNext = levels.users[userId].level * 100;
+
+    if (levels.users[userId].xp >= xpToNext) {
+        levels.users[userId].level += 1;
+        levels.users[userId].xp -= xpToNext;
+
+        // ============================
+        // Crear embed bonito
+        // ============================
+        const levelUpEmbed = new EmbedBuilder()
+            .setColor('#00FFFF')
+            .setTitle(`🌟 ¡LEVEL UP! 🌟`)
+            .setDescription(`
+╭━━━━━✨━━━━━╮
+💠 ¡Felicidades <@${userId}>!
+💎 Has subido al **Nivel ${levels.users[userId].level}**
+╰━━━━━✨━━━━━╯
+        `)
+            .addFields(
+                { name: '💥 Experiencia total', value: `${levels.users[userId].xp} XP`, inline: true },
+                { name: '🏆 Próximo nivel', value: `${xpToNext} XP necesarios`, inline: true }
+            )
+            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+            .setFooter({ text: 'Power Luki Network • Sistema de Niveles' })
+            .setTimestamp();
+
+        const levelChannel = message.guild.channels.cache.find(ch => ch.name === '『🆙』niveles');
+        if (levelChannel) levelChannel.send({ embeds: [levelUpEmbed] });
+    }
+
+    saveLevels();
+});
+
 // ============================
 // Sistema de baneos
 // ============================
@@ -330,6 +411,7 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
 
 
 
