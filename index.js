@@ -161,12 +161,17 @@ client.on('interactionCreate', async interaction => {
 // ============================
 // Slash command: /sugerir
 // ============================
+const { SlashCommandBuilder, REST, Routes, EmbedBuilder, ChannelType } = require('discord.js'); // si usas CommonJS
+// si tu proyecto usa ESM (import/export) deja tus imports originales
+
 const commands = [
     new SlashCommandBuilder()
         .setName('sugerir')
         .setDescription('Envía una sugerencia al canal de sugerencias')
         .addStringOption(option =>
-            option.setName('mensaje').setDescription('Escribe tu sugerencia').setRequired(true)
+            option.setName('mensaje')
+                .setDescription('Escribe tu sugerencia')
+                .setRequired(true)
         )
 ].map(cmd => cmd.toJSON());
 
@@ -175,13 +180,20 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
-        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands });
+        // Reemplaza con tu BOT ID y GUILD ID
+        await rest.put(
+            Routes.applicationGuildCommands('1433313752488607821', '1340442398442127480'),
+            { body: commands }
+        );
         console.log('Comandos actualizados correctamente.');
     } catch (err) {
         console.error('Error al registrar comandos:', err);
     }
 })();
 
+// ============================
+// Listener de interacción
+// ============================
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'sugerir') return;
@@ -281,3 +293,4 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
