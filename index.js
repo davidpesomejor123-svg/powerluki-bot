@@ -191,7 +191,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
-        await rest.put(Routes.applicationCommands('1340442398442127480'), { body: commands }); // Cambia a tu ID de aplicación
+        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands }); // Cambia a tu ID de aplicación
         console.log('Comandos actualizados correctamente.');
     } catch (err) {
         console.error('Error al registrar comandos:', err);
@@ -376,3 +376,4 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
