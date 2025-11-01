@@ -161,29 +161,6 @@ client.on('interactionCreate', async interaction => {
 // ============================
 // Slash command: /sugerir
 // ============================
-const commands = [
-    new SlashCommandBuilder()
-        .setName('sugerir')
-        .setDescription('Envía una sugerencia al canal de sugerencias')
-        .addStringOption(option =>
-            option.setName('mensaje')
-                .setDescription('Escribe tu sugerencia')
-                .setRequired(true)
-        )
-].map(cmd => cmd.toJSON());
-
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-(async () => {
-    try {
-        console.log('Actualizando comandos de slash...');
-        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands });
-        console.log('Comandos actualizados correctamente.');
-    } catch (err) {
-        console.error('Error al registrar comandos:', err);
-    }
-})();
-
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'sugerir') return;
@@ -193,8 +170,8 @@ client.on('interactionCreate', async interaction => {
 
         const suggestion = interaction.options.getString('mensaje');
 
-        // Usamos el ID del canal directamente
-        const suggestionChannel = interaction.guild.channels.cache.get('1340503280987541534');
+        // Obtenemos el canal directamente con fetch()
+        const suggestionChannel = await interaction.guild.channels.fetch('1340503280987541534');
         if (!suggestionChannel) {
             return interaction.editReply({ content: '❌ No se encontró el canal de sugerencias.' });
         }
@@ -283,5 +260,6 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
 
 
