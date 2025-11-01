@@ -161,19 +161,51 @@ client.on('interactionCreate', async interaction => {
 // ============================
 // Slash command: /sugerir
 // ============================
+const commands = [
+    new SlashCommandBuilder()
+        .setName('sugerir')
+        .setDescription('Envía una sugerencia al canal de sugerencias')
+        .addStringOption(option =>
+            option.setName('mensaje').setDescription('Escribe tu sugerencia').setRequired(true)
+        )
+].map(cmd => cmd.toJSON());
+
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+(async () => {
+    try {
+        console.log('Actualizando comandos de slash...');
+        await rest.put(Routes.applicationCommands('1340442398442127480'), { body: commands }); // Cambia a tu ID de aplicación
+        console.log('Comandos actualizados correctamente.');
+    } catch (err) {
+        console.error('Error al registrar comandos:', err);
+    }
+})();
+
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'sugerir') return;
 
+    // Verificar que sea en servidor
+    if (!interaction.guild) {
+        return interaction.reply({
+            content: '❌ Este comando solo puede usarse en un servidor.',
+            flags: 64
+        });
+    }
+
     try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const suggestion = interaction.options.getString('mensaje');
 
-        // Obtenemos el canal directamente con fetch()
+        // Cambia por el ID de tu canal de sugerencias
         const suggestionChannel = await interaction.guild.channels.fetch('1340503280987541534');
-        if (!suggestionChannel) {
-            return interaction.editReply({ content: '❌ No se encontró el canal de sugerencias.' });
+
+        if (!suggestionChannel || suggestionChannel.type !== ChannelType.GuildText) {
+            return interaction.editReply({
+                content: '❌ Canal de sugerencias inválido o no accesible.'
+            });
         }
 
         const embed = new EmbedBuilder()
@@ -193,7 +225,6 @@ client.on('interactionCreate', async interaction => {
         await interaction.editReply({
             content: '✅ Tu sugerencia ha sido enviada correctamente.'
         });
-
     } catch (err) {
         console.error('Error en /sugerir:', err);
         if (interaction.deferred) {
@@ -203,7 +234,7 @@ client.on('interactionCreate', async interaction => {
         } else {
             await interaction.reply({
                 content: '❌ Error inesperado al procesar la sugerencia.',
-                ephemeral: true
+                flags: 64
             });
         }
     }
@@ -260,6 +291,7 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
 
 
 
