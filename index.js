@@ -1,27 +1,28 @@
 // index.js
-import 'dotenv/config'; // Equivalente a require('dotenv').config()
+import 'dotenv/config';
 import fs from 'fs';
-import { 
-    Client, 
-    GatewayIntentBits, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    ChannelType, 
+import express from 'express';
+import {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ChannelType,
     PermissionsBitField,
     SlashCommandBuilder,
     REST,
     Routes
 } from 'discord.js';
 
-// Cargar JSON usando fs para compatibilidad con Render.com
+// ============================
+// Cargar JSON y variables
+// ============================
 let banConfig = JSON.parse(fs.readFileSync('./banConfig.json', 'utf8'));
 let invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
-
 const guildInvites = new Map();
 
-// Inicialización del cliente
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -31,20 +32,26 @@ const client = new Client({
     ]
 });
 
-// --------------------------------------
-// Bot listo
-// --------------------------------------
+// ============================
+// Evento Ready
+// ============================
 client.once('ready', async () => {
     console.log(`✅ Bot conectado como ${client.user.tag}`);
 
-    // Inicializar cache de invites para cada servidor
-    client.guilds.cache.forEach(async guild => {
-        const firstInvites = await guild.invites.fetch();
-        guildInvites.set(guild.id, new Map(firstInvites.map(i => [i.code, i.uses])));
-    });
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            const firstInvites = await guild.invites.fetch();
+            guildInvites.set(guild.id, new Map(firstInvites.map(i => [i.code, i.uses])));
+        } catch (err) {
+            console.warn(`No se pudieron obtener invitaciones en ${guild.name}`);
+        }
+    }
 
-    // Mensaje de tickets solo si no existe
-    const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets' && ch.type === ChannelType.GuildText);
+    // Verificar canal de tickets
+    const ticketChannel = client.channels.cache.find(
+        ch => ch.name === '『📖』tickets' && ch.type === ChannelType.GuildText
+    );
+
     if (ticketChannel) {
         const fetchedMessages = await ticketChannel.messages.fetch({ limit: 50 });
         const botMessageExists = fetchedMessages.some(msg => msg.author.id === client.user.id);
@@ -61,187 +68,132 @@ client.once('ready', async () => {
 ‼️ **Otros**: Diferentes categorías  
 🛒 **Compras**: Dudas sobre artículos o servicios
 
-💠 No abrir ticket innecesariamente 💠
-
 ⬇️ Selecciona el tipo de ticket que deseas crear:
                 `);
 
-            const buttons = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder().setCustomId('ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId('ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success)
-                );
+            const buttons = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success)
+            );
 
             ticketChannel.send({ embeds: [embed], components: [buttons] });
         }
     }
 });
 
-// --------------------------------------
-// Comando de prueba
-// --------------------------------------
+// ============================
+// Comando simple
+// ============================
 client.on('messageCreate', message => {
     if (message.content === '!hola') {
         message.reply('👋 ¡Hola! Soy tu bot.');
     }
 });
 
-// --------------------------------------
+// ============================
 // Bienvenida personalizada
-// --------------------------------------
+// ============================
 client.on('guildMemberAdd', async member => {
-    const channel = member.guild.channels.cache.find(ch => ch.name === '『👋』bienvenidos' && ch.type === ChannelType.GuildText);
-    if (channel) {
-        const embed = new EmbedBuilder()
-            .setColor('#8A2BE2')
-            .setTitle(`✨ ¡Bienvenido, ${member.user.username}! ✨`)
-            .setDescription(`
+    try {
+        const channel = member.guild.channels.cache.find(
+            ch => ch.name === '『👋』bienvenidos' && ch.type === ChannelType.GuildText
+        );
+        if (channel) {
+            const embed = new EmbedBuilder()
+                .setColor('#8A2BE2')
+                .setTitle(`✨ ¡Bienvenido, ${member.user.username}! ✨`)
+                .setDescription(`
 \`- - - • POWER LUKI NETWORK • - - -\`
 
-╭━━━━━━━━━━━━━━━━━━━━━━━╮
 💎 **${member.user.username}** ha llegado al epicentro de nuestra comunidad.
-🎇 Aquí cada rincón tiene sorpresas y cada chat guarda secretos.
-🌟 Explora, comparte y deja tu huella en Power Luki Network.
-╰━━━━━━━━━━━━━━━━━━━━━━━╯
+🎇 Aquí cada rincón tiene sorpresas.
+🌟 ¡Disfruta tu estadía!
+                `)
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' });
 
-📌 **Guía rápida para comenzar:**
-➤ 📝 _#normas・Lo esencial para todos_
-➤ 💬 _#general・Conversa y comparte_
-➤ 📢 _#anuncios・Todo lo importante_
-
-🚀 ¡Cada nuevo miembro hace crecer nuestra energía! Tú eres parte del cambio y la vibra de Power Luki.
-\`- - - • Único y Exclusivo • - - -\`
-            `)
-            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-            .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' });
-
-        channel.send({ embeds: [embed] });
-    }
-
-    // Invite tracker
-    const newInvites = await member.guild.invites.fetch();
-    const oldInvites = guildInvites.get(member.guild.id);
-    const usedInvite = newInvites.find(inv => oldInvites.get(inv.code) < inv.uses);
-
-    guildInvites.set(member.guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
-
-    let inviterTag = 'Desconocido';
-    if (usedInvite && usedInvite.inviter) {
-        inviterTag = usedInvite.inviter.tag;
-        if (!invites[inviterTag]) invites[inviterTag] = 0;
-        invites[inviterTag]++;
-        fs.writeFileSync('./invites.json', JSON.stringify(invites, null, 2));
-    }
-
-    const inviteChannel = member.guild.channels.cache.find(ch => ch.name === '『🗓』invitaciones' && ch.type === ChannelType.GuildText);
-    if (inviteChannel) {
-        const embedInv = new EmbedBuilder()
-            .setColor('#FFD700')
-            .setTitle('🎉 Nuevo Invitado')
-            .setDescription(`
-👤 **Invitado:** ${member.user.tag}  
-🧑‍💼 **Invitador:** ${inviterTag}  
-⭐ **Total Invitaciones:** ${invites[inviterTag] || 0}
-            `)
-            .setFooter({ text: 'Power Luki Network • Registro de Invitaciones' })
-            .setTimestamp();
-        inviteChannel.send({ embeds: [embedInv] });
+            await channel.send({ embeds: [embed] });
+        }
+    } catch (err) {
+        console.error('Error en bienvenida:', err);
     }
 });
 
-// --------------------------------------
-// Despedida personalizada
-// --------------------------------------
-client.on('guildMemberRemove', member => {
-    const channel = member.guild.channels.cache.find(ch => ch.name === '『😔』despedidas' && ch.type === ChannelType.GuildText);
-    if (!channel) return;
-
-    const embed = new EmbedBuilder()
-        .setColor('#FF4500')
-        .setTitle(`😔 ¡Hasta pronto, ${member.user.username}! 😔`)
-        .setDescription(`
-\`- - - • POWER LUKI NETWORK • - - -\`
-
-╭━━━━━━━━━━━━━━━━━━━━━━━╮
-💔 **${member.user.username}** nos deja temporalmente.
-🌟 Esperamos volver a verte pronto en Power Luki Network.
-╰━━━━━━━━━━━━━━━━━━━━━━━╯
-
-📌 Recuerda que siempre eres parte de nuestra comunidad.
-\`- - - • Siempre Bienvenido • - - -\`
-        `)
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: 'Power Luki Network • Nos vemos pronto' })
-        .setTimestamp();
-
-    channel.send({ embeds: [embed] });
-});
-
-// --------------------------------------
+// ============================
 // Tickets con botones
-// --------------------------------------
+// ============================
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
+    if (!interaction.guild) return;
 
-    const category = interaction.customId.replace('ticket_', '');
-    const guild = interaction.guild;
+    try {
+        const category = interaction.customId.replace('ticket_', '');
+        const guild = interaction.guild;
 
-    const ticketChannel = await guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: ChannelType.GuildText,
-        permissionOverwrites: [
-            { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-        ],
-    });
+        const ticketChannel = await guild.channels.create({
+            name: `ticket-${interaction.user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+            ]
+        });
 
-    await ticketChannel.send(`🎫 Hola ${interaction.user}, has creado un ticket de **${category.toUpperCase()}**. El staff te atenderá pronto.`);
-    await interaction.reply({ content: `✅ Se ha creado tu ticket en ${ticketChannel}`, ephemeral: true });
+        await ticketChannel.send(
+            `🎫 Hola ${interaction.user}, has creado un ticket de **${category.toUpperCase()}**. El staff te atenderá pronto.`
+        );
+
+        await interaction.reply({
+            content: `✅ Se ha creado tu ticket en ${ticketChannel}`,
+            ephemeral: true
+        });
+    } catch (err) {
+        console.error('Error al crear ticket:', err);
+        await interaction.reply({
+            content: '❌ Ocurrió un error al crear el ticket.',
+            ephemeral: true
+        });
+    }
 });
 
-// --------------------------------------
-// Sistema de Sugerencias
-// --------------------------------------
+// ============================
+// Slash command: /sugerir
+// ============================
 const commands = [
     new SlashCommandBuilder()
         .setName('sugerir')
-        .setDescription('Enviar una sugerencia al canal de sugerencias')
+        .setDescription('Envía una sugerencia al canal de sugerencias')
         .addStringOption(option =>
-            option.setName('mensaje')
-                .setDescription('Escribe tu sugerencia')
-                .setRequired(true)
+            option.setName('mensaje').setDescription('Escribe tu sugerencia').setRequired(true)
         )
-].map(command => command.toJSON());
+].map(cmd => cmd.toJSON());
 
-// Registrar comando (global)
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
-        await rest.put(
-            Routes.applicationCommands('1433313752488607821'),
-            { body: commands }
-        );
-        console.log('Comandos de slash actualizados.');
-    } catch (error) {
-        console.error(error);
+        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands });
+        console.log('Comandos actualizados correctamente.');
+    } catch (err) {
+        console.error('Error al registrar comandos:', err);
     }
 })();
 
-// Manejo de la interacción de sugerencias con defer
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName !== 'sugerir') return;
 
-    if (interaction.commandName === 'sugerir') {
+    try {
         await interaction.deferReply({ ephemeral: true });
 
         const suggestion = interaction.options.getString('mensaje');
-
-        const suggestionChannel = interaction.guild.channels.cache.find(
+        const suggestionChannel = interaction.guild?.channels.cache.find(
             ch => ch.name === '『📃』sugerencias' && ch.type === ChannelType.GuildText
         );
+
         if (!suggestionChannel) {
             return interaction.editReply({ content: '❌ No se encontró el canal de sugerencias.' });
         }
@@ -256,91 +208,76 @@ client.on('interactionCreate', async interaction => {
             )
             .setFooter({ text: 'Power Luki Network • Sugerencias' });
 
-        try {
-            const msg = await suggestionChannel.send({ embeds: [embed] });
-            await msg.react('✅');
-            await msg.react('❌');
+        const msg = await suggestionChannel.send({ embeds: [embed] });
+        await msg.react('✅');
+        await msg.react('❌');
 
-            await interaction.editReply({ content: '✅ Tu sugerencia ha sido enviada al canal de sugerencias.' });
-        } catch (err) {
-            console.error(err);
-            await interaction.editReply({ content: '❌ Ocurrió un error al enviar la sugerencia.' });
+        await interaction.editReply({
+            content: '✅ Tu sugerencia ha sido enviada correctamente.'
+        });
+    } catch (err) {
+        console.error('Error en /sugerir:', err);
+        if (interaction.deferred) {
+            await interaction.editReply({
+                content: '❌ Ocurrió un error al enviar la sugerencia.'
+            });
+        } else {
+            await interaction.reply({
+                content: '❌ Error inesperado al procesar la sugerencia.',
+                ephemeral: true
+            });
         }
     }
 });
 
-// --------------------------------------
-// Sistema de baneos avanzado
-// --------------------------------------
+// ============================
+// Sistema de baneos
+// ============================
 client.on('messageCreate', async message => {
-    if (!message.guild) return;
+    if (!message.guild || !message.member) return;
     if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return;
 
     const args = message.content.trim().split(/ +/g);
-
-    // BANEAR
     if (args[0] === '!ban') {
         const user = message.mentions.members.first();
-        if (!user) return message.reply('❌ Debes mencionar a un usuario para banear.');
-        if (!user.bannable) return message.reply('❌ No puedo banear a este usuario.');
+        if (!user) return message.reply('❌ Menciona un usuario para banear.');
+        if (!user.bannable) return message.reply('❌ No puedo banear a ese usuario.');
 
         const reason = args.slice(2).join(' ') || 'No especificada';
-        const date = new Date();
-
         try {
             await user.ban({ reason });
-            message.reply(`✅ ${user.user.tag} ha sido baneado.`);
+            message.reply(`✅ ${user.user.tag} fue baneado.`);
 
-            const logEmbed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('🔨 Usuario Baneado')
-                .addFields(
-                    { name: '👤 Usuario', value: `${user.user.tag} (${user.id})`, inline: false },
-                    { name: '👮 Baneado por', value: `${message.author.tag}`, inline: false },
-                    { name: '📄 Razón', value: `${reason}`, inline: false },
-                    { name: '⏰ Fecha y hora', value: `${date.toLocaleString()}`, inline: false }
-                )
-                .setFooter({ text: 'Power Luki Network • Registro de baneos' })
-                .setTimestamp();
-
-            const logChannel = message.guild.channels.cache.find(ch => ch.name === '『🔨』baneos' && ch.type === ChannelType.GuildText);
-            if (logChannel) logChannel.send({ embeds: [logEmbed] });
-
-            // Guardar en JSON
-            banConfig.bannedUsers.push({
-                id: user.id,
-                tag: user.user.tag,
-                bannedBy: message.author.tag,
-                reason: reason,
-                date: date.toISOString()
-            });
-            fs.writeFileSync('./banConfig.json', JSON.stringify(banConfig, null, 2));
+            const logChannel = message.guild.channels.cache.find(
+                ch => ch.name === '『🔨』baneos' && ch.type === ChannelType.GuildText
+            );
+            if (logChannel) {
+                const embed = new EmbedBuilder()
+                    .setColor('#FF0000')
+                    .setTitle('🔨 Usuario Baneado')
+                    .addFields(
+                        { name: 'Usuario', value: user.user.tag },
+                        { name: 'Por', value: message.author.tag },
+                        { name: 'Razón', value: reason }
+                    );
+                logChannel.send({ embeds: [embed] });
+            }
         } catch (err) {
             console.error(err);
-            message.reply('❌ Ocurrió un error al intentar banear al usuario.');
-        }
-    }
-
-    // DESBANEAR
-    if (args[0] === '!unban') {
-        const userId = args[1];
-        if (!userId) return message.reply('❌ Debes poner la ID del usuario a desbanear.');
-
-        try {
-            await message.guild.members.unban(userId);
-            message.reply(`✅ Usuario con ID ${userId} ha sido desbaneado.`);
-
-            banConfig.bannedUsers = banConfig.bannedUsers.filter(b => b.id !== userId);
-            fs.writeFileSync('./banConfig.json', JSON.stringify(banConfig, null, 2));
-        } catch (err) {
-            console.error(err);
-            message.reply('❌ No se pudo desbanear al usuario.');
+            message.reply('❌ Error al intentar banear al usuario.');
         }
     }
 });
 
-// --------------------------------------
-// Login del bot
-// --------------------------------------
-client.login(process.env.TOKEN);
+// ============================
+// Servidor web para Render
+// ============================
+const app = express();
+app.get('/', (req, res) => res.send('✅ Bot Power_luki NETWORK activo en Render'));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT}`));
 
+// ============================
+// Login del bot
+// ============================
+client.login(process.env.TOKEN);
