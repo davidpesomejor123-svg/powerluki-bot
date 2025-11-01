@@ -23,6 +23,22 @@ let banConfig = JSON.parse(fs.readFileSync('./banConfig.json', 'utf8'));
 let invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
 const guildInvites = new Map();
 
+// ============================
+// Niveles
+// ============================
+let levels = { users: {} };
+if (fs.existsSync('./levels.json')) {
+    levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
+}
+function saveLevels() {
+    fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
+}
+const MIN_XP = 10;
+const MAX_XP = 20;
+
+// ============================
+// Client
+// ============================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -105,7 +121,7 @@ client.on('guildMemberAdd', async member => {
                 .setColor('#8A2BE2')
                 .setTitle(`✨ ¡Bienvenido, ${member.user.username}! ✨`)
                 .setDescription(`
-\`- - - • POWER LUKI NETWORK • - - -\`
+\`-_- - POWER LUKI NETWORK -_- \`
 
 💎 **${member.user.username}** ha llegado al epicentro de nuestra comunidad.
 🎇 Aquí cada rincón tiene sorpresas.
@@ -186,7 +202,6 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'sugerir') return;
 
-    // Verificar que sea en servidor
     if (!interaction.guild) {
         return interaction.reply({
             content: '❌ Este comando solo puede usarse en un servidor.',
@@ -196,10 +211,7 @@ client.on('interactionCreate', async interaction => {
 
     try {
         await interaction.deferReply({ flags: 64 });
-
         const suggestion = interaction.options.getString('mensaje');
-
-        // Cambia por el ID de tu canal de sugerencias
         const suggestionChannel = await interaction.guild.channels.fetch('1340503280987541534');
 
         if (!suggestionChannel || suggestionChannel.type !== ChannelType.GuildText) {
@@ -241,88 +253,44 @@ client.on('interactionCreate', async interaction => {
 });
 
 // ============================
-// Comando !boost - Agradecimiento automático en 『💎』boots
+// Comando !boost
 // ============================
 client.on('messageCreate', async message => {
-    if (message.author.bot) return; // Ignorar bots
-    if (message.content.toLowerCase() !== '!boost') return; // Solo !boost
+    if (message.author.bot) return;
+    if (message.content.toLowerCase() !== '!boost') return;
 
-    try {
-        // Buscar canal 『💎』boots
-        const boostChannel = message.guild.channels.cache.find(
-            ch => ch.name === '『💎』boots' && ch.type === ChannelType.GuildText
-        );
+    const boostChannel = message.guild.channels.cache.find(
+        ch => ch.name === '『💎』boots' && ch.type === ChannelType.GuildText
+    );
 
-        if (!boostChannel) {
-            return message.reply('❌ No se encontró el canal 『💎』boots.');
-        }
+    if (!boostChannel) return message.reply('❌ No se encontró el canal 『💎』boots.');
 
-        const embed = new EmbedBuilder()
-            .setColor('#ff69b4') // Color llamativo
-            .setTitle('🚀 -_ ¡NUEVO BOOST! -_ 🚀')
-            .setDescription(`
+    const embed = new EmbedBuilder()
+        .setColor('#ff69b4')
+        .setTitle('🚀 -_ ¡NUEVO BOOST! -_ 🚀')
+        .setDescription(`
 ✨ -_ ¡Gracias por tu apoyo, ${message.author.username}! -_ ✨
 ━━━━━━━━━━━━━━━━━━━━━━
 💖 -_ Usuario: ${message.author.tag} -_
 🎁 -_ Beneficio: ¡El servidor se hace más fuerte gracias a ti! -_
 ━━━━━━━━━━━━━━━━━━━━━━
-            `)
-            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-            .setImage('https://media.giphy.com/media/l0MYC0LajbaPoEADu/giphy.gif')
-            .setFooter({ text: 'Power Luki Network -_ • ¡Cada boost cuenta! -_' })
-            .setTimestamp();
+        `)
+        .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+        .setImage('https://media.giphy.com/media/l0MYC0LajbaPoEADu/giphy.gif')
+        .setFooter({ text: 'Power Luki Network -_ • ¡Cada boost cuenta! -_' })
+        .setTimestamp();
 
-        await boostChannel.send({ embeds: [embed] });
-    } catch (err) {
-        console.error('Error al enviar mensaje de boost:', err);
-        message.channel.send('❌ -_ Ocurrió un error al agradecer tu boost -_.');
-    }
-});
-
-///// EVENTO: _-_ SISTEMA DE NIVELES _-_ /////
-
-import fs from 'fs';
-import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
-import 'dotenv/config';
-
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ]
+    await boostChannel.send({ embeds: [embed] });
 });
 
 // ============================
-// Cargar niveles
-// ============================
-let levels = { users: {} };
-if (fs.existsSync('./levels.json')) {
-    levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
-}
-
-function saveLevels() {
-    fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
-}
-
-// ============================
-// Variables de XP
-// ============================
-const MIN_XP = 10;
-const MAX_XP = 20;
-
-// ============================
-// Evento mensaje
+// ///// EVENTO: _-_ SISTEMA DE NIVELES _-_ /////
 // ============================
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
     const userId = message.author.id;
-
-    if (!levels.users[userId]) {
-        levels.users[userId] = { xp: 0, level: 1 };
-    }
+    if (!levels.users[userId]) levels.users[userId] = { xp: 0, level: 1 };
 
     const xp = Math.floor(Math.random() * (MAX_XP - MIN_XP + 1)) + MIN_XP;
     levels.users[userId].xp += xp;
@@ -333,9 +301,6 @@ client.on('messageCreate', async message => {
         levels.users[userId].level += 1;
         levels.users[userId].xp -= xpToNext;
 
-        // ============================
-        // Crear embed bonito
-        // ============================
         const levelUpEmbed = new EmbedBuilder()
             .setColor('#00FFFF')
             .setTitle(`🌟 ¡LEVEL UP! 🌟`)
@@ -344,7 +309,7 @@ client.on('messageCreate', async message => {
 💠 ¡Felicidades <@${userId}>!
 💎 Has subido al **Nivel ${levels.users[userId].level}**
 ╰━━━━━✨━━━━━╯
-        `)
+            `)
             .addFields(
                 { name: '💥 Experiencia total', value: `${levels.users[userId].xp} XP`, inline: true },
                 { name: '🏆 Próximo nivel', value: `${xpToNext} XP necesarios`, inline: true }
@@ -411,9 +376,3 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
-
-
-
-
-
-
