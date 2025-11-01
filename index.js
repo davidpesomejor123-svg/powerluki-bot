@@ -1,4 +1,4 @@
-// index.js
+//index.js
 import 'dotenv/config';
 import fs from 'fs';
 import express from 'express';
@@ -146,6 +146,8 @@ client.on('interactionCreate', async interaction => {
     // Crear ticket
     if (interaction.customId.startsWith('ticket_')) {
         try {
+            await interaction.deferReply({ flags: 64 });
+
             const category = interaction.customId.replace('ticket_', '');
             const guild = interaction.guild;
 
@@ -154,7 +156,8 @@ client.on('interactionCreate', async interaction => {
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
                     { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
+                    { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageMessages] }
                 ]
             });
 
@@ -177,24 +180,24 @@ Usa los botones a continuación:
 
             await ticketChannel.send({ embeds: [embed], components: [ticketButtons] });
 
-            await interaction.reply({
-                content: `✅ Ticket creado en ${ticketChannel}`,
-                ephemeral: true
+            await interaction.editReply({
+                content: `✅ Ticket creado correctamente en ${ticketChannel}.`
             });
         } catch (err) {
             console.error('Error al crear ticket:', err);
-            await interaction.reply({
-                content: '❌ Error al crear el ticket.',
-                ephemeral: true
-            });
+            if (!interaction.replied) {
+                await interaction.editReply({ content: '❌ Error al crear el ticket.' });
+            }
         }
     }
 
     // Reclamar ticket
     else if (interaction.customId === 'ticket_claim') {
+        await interaction.deferReply({ flags: 64 });
         const channel = interaction.channel;
+
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
-            return interaction.reply({ content: '❌ No tienes permiso para reclamar tickets.', ephemeral: true });
+            return interaction.editReply({ content: '❌ No tienes permiso para reclamar tickets.' });
 
         const embed = new EmbedBuilder()
             .setColor('#FFD700')
@@ -202,13 +205,15 @@ Usa los botones a continuación:
             .setDescription(`Este ticket ha sido reclamado por <@${interaction.user.id}>.`);
 
         await channel.send({ embeds: [embed] });
-        await interaction.deferUpdate();
+        await interaction.editReply({ content: '✅ Ticket reclamado correctamente.' });
     }
 
     // Cerrar ticket
     else if (interaction.customId === 'ticket_close') {
+        await interaction.deferReply({ flags: 64 });
         const channel = interaction.channel;
-        await interaction.reply({ content: '🔒 Cerrando ticket en 5 segundos...', ephemeral: true });
+
+        await interaction.editReply({ content: '🔒 Cerrando ticket en 5 segundos...' });
         setTimeout(() => channel.delete().catch(() => {}), 5000);
     }
 });
