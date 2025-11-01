@@ -1,24 +1,18 @@
 {
-  "name": "powerluki-bot",
+  "name": "bot",
   "version": "1.0.0",
-  "description": "Bot de Discord para sugerencias y moderación",
+  "description": "",
   "main": "index.js",
-  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "keywords": ["discord", "bot", "sugerencias", "moderacion"],
-  "author": "Power_luki",
+  "keywords": [],
+  "author": "",
   "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
     "discord.js": "^14.24.1",
-    "dotenv": "^17.2.3"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
   }
 }
