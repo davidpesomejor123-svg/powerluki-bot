@@ -161,9 +161,6 @@ client.on('interactionCreate', async interaction => {
 // ============================
 // Slash command: /sugerir
 // ============================
-const { SlashCommandBuilder, REST, Routes, EmbedBuilder, ChannelType } = require('discord.js'); // si usas CommonJS
-// si tu proyecto usa ESM (import/export) deja tus imports originales
-
 const commands = [
     new SlashCommandBuilder()
         .setName('sugerir')
@@ -180,20 +177,13 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
-        // Reemplaza con tu BOT ID y GUILD ID
-        await rest.put(
-            Routes.applicationGuildCommands('1433313752488607821', '1340442398442127480'),
-            { body: commands }
-        );
+        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands });
         console.log('Comandos actualizados correctamente.');
     } catch (err) {
         console.error('Error al registrar comandos:', err);
     }
 })();
 
-// ============================
-// Listener de interacción
-// ============================
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'sugerir') return;
@@ -202,10 +192,9 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply({ ephemeral: true });
 
         const suggestion = interaction.options.getString('mensaje');
-        const suggestionChannel = interaction.guild?.channels.cache.find(
-            ch => ch.name === '『📃』sugerencias' && ch.type === ChannelType.GuildText
-        );
 
+        // Usamos el ID del canal directamente
+        const suggestionChannel = interaction.guild.channels.cache.get('1340503280987541534');
         if (!suggestionChannel) {
             return interaction.editReply({ content: '❌ No se encontró el canal de sugerencias.' });
         }
@@ -227,6 +216,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.editReply({
             content: '✅ Tu sugerencia ha sido enviada correctamente.'
         });
+
     } catch (err) {
         console.error('Error en /sugerir:', err);
         if (interaction.deferred) {
@@ -293,4 +283,5 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
 
