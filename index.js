@@ -241,6 +241,45 @@ client.on('interactionCreate', async interaction => {
 });
 
 // ============================
+// Comando !boost - Agradecimiento automático en 『💎』boots
+// ============================
+client.on('messageCreate', async message => {
+    if (message.author.bot) return; // Ignorar bots
+    if (message.content.toLowerCase() !== '!boost') return; // Solo !boost
+
+    try {
+        // Buscar canal 『💎』boots
+        const boostChannel = message.guild.channels.cache.find(
+            ch => ch.name === '『💎』boots' && ch.type === ChannelType.GuildText
+        );
+
+        if (!boostChannel) {
+            return message.reply('❌ No se encontró el canal 『💎』boots.');
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor('#ff69b4') // Color llamativo
+            .setTitle('🚀 -_ ¡NUEVO BOOST! -_ 🚀')
+            .setDescription(`
+✨ -_ ¡Gracias por tu apoyo, ${message.author.username}! -_ ✨
+━━━━━━━━━━━━━━━━━━━━━━
+💖 -_ Usuario: ${message.author.tag} -_
+🎁 -_ Beneficio: ¡El servidor se hace más fuerte gracias a ti! -_
+━━━━━━━━━━━━━━━━━━━━━━
+            `)
+            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+            .setImage('https://media.giphy.com/media/l0MYC0LajbaPoEADu/giphy.gif')
+            .setFooter({ text: 'Power Luki Network -_ • ¡Cada boost cuenta! -_' })
+            .setTimestamp();
+
+        await boostChannel.send({ embeds: [embed] });
+    } catch (err) {
+        console.error('Error al enviar mensaje de boost:', err);
+        message.channel.send('❌ -_ Ocurrió un error al agradecer tu boost -_.');
+    }
+});
+
+// ============================
 // Sistema de baneos
 // ============================
 client.on('messageCreate', async message => {
@@ -291,6 +330,7 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
+
 
 
 
