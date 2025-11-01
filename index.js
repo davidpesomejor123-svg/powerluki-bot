@@ -63,7 +63,7 @@ client.once('ready', async () => {
         }
     }
 
-    // Verificar canal de tickets
+    // Canal de tickets
     const ticketChannel = client.channels.cache.find(
         ch => ch.name === '『📖』tickets' && ch.type === ChannelType.GuildText
     );
@@ -77,12 +77,12 @@ client.once('ready', async () => {
                 .setColor('#00BFFF')
                 .setTitle('⚠️ Sistema de Tickets | Power Luki Studios ⚠️')
                 .setDescription(`
-💠 Tickets inactivos serán cerrados pasados los 3 días 💠
+💠 Los tickets inactivos se cerrarán pasados 3 días 💠
 
-⚙️ **Soporte**: Ayuda general o asistencia en el servidor  
-⚠️ **Reportes**: Bugs, errores o problemas en el servidor  
-‼️ **Otros**: Diferentes categorías  
-🛒 **Compras**: Dudas sobre artículos o servicios
+⚙️ **Soporte**: Ayuda general  
+⚠️ **Reportes**: Bugs o problemas  
+‼️ **Otros**: Dudas varias  
+🛒 **Compras**: Asistencia de tienda
 
 ⬇️ Selecciona el tipo de ticket que deseas crear:
                 `);
@@ -123,9 +123,8 @@ client.on('guildMemberAdd', async member => {
                 .setDescription(`
 \`-_- - POWER LUKI NETWORK -_- \`
 
-💎 **${member.user.username}** ha llegado al epicentro de nuestra comunidad.
-🎇 Aquí cada rincón tiene sorpresas.
-🌟 ¡Disfruta tu estadía!
+💎 **${member.user.username}** ha llegado a nuestra comunidad.
+🎇 ¡Disfruta tu estadía!
                 `)
                 .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
                 .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' });
@@ -144,33 +143,73 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
     if (!interaction.guild) return;
 
-    try {
-        const category = interaction.customId.replace('ticket_', '');
-        const guild = interaction.guild;
+    // Crear ticket
+    if (interaction.customId.startsWith('ticket_')) {
+        try {
+            const category = interaction.customId.replace('ticket_', '');
+            const guild = interaction.guild;
 
-        const ticketChannel = await guild.channels.create({
-            name: `ticket-${interaction.user.username}`,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-                { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-            ]
-        });
+            const ticketChannel = await guild.channels.create({
+                name: `ticket-${interaction.user.username}`,
+                type: ChannelType.GuildText,
+                permissionOverwrites: [
+                    { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                ]
+            });
 
-        await ticketChannel.send(
-            `🎫 Hola ${interaction.user}, has creado un ticket de **${category.toUpperCase()}**. El staff te atenderá pronto.`
-        );
+            const embed = new EmbedBuilder()
+                .setColor('#00BFFF')
+                .setTitle(`🎫 Ticket de ${category.toUpperCase()}`)
+                .setDescription(`
+Hola ${interaction.user}, un miembro del staff te atenderá pronto.
 
-        await interaction.reply({
-            content: `✅ Se ha creado tu ticket en ${ticketChannel}`,
-            ephemeral: true
-        });
-    } catch (err) {
-        console.error('Error al crear ticket:', err);
-        await interaction.reply({
-            content: '❌ Ocurrió un error al crear el ticket.',
-            ephemeral: true
-        });
+Usa los botones a continuación:
+- 🎟️ **Reclamar**: Un staff se hace cargo.
+- 🔒 **Cerrar**: Cierra el ticket.
+                `)
+                .setFooter({ text: 'Power Luki Network • Sistema de Tickets' });
+
+            const ticketButtons = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('ticket_claim').setLabel('🎟️ Reclamar').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('ticket_close').setLabel('🔒 Cerrar').setStyle(ButtonStyle.Danger)
+            );
+
+            await ticketChannel.send({ embeds: [embed], components: [ticketButtons] });
+
+            await interaction.reply({
+                content: `✅ Ticket creado en ${ticketChannel}`,
+                ephemeral: true
+            });
+        } catch (err) {
+            console.error('Error al crear ticket:', err);
+            await interaction.reply({
+                content: '❌ Error al crear el ticket.',
+                ephemeral: true
+            });
+        }
+    }
+
+    // Reclamar ticket
+    else if (interaction.customId === 'ticket_claim') {
+        const channel = interaction.channel;
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
+            return interaction.reply({ content: '❌ No tienes permiso para reclamar tickets.', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setColor('#FFD700')
+            .setTitle('🎟️ Ticket reclamado')
+            .setDescription(`Este ticket ha sido reclamado por <@${interaction.user.id}>.`);
+
+        await channel.send({ embeds: [embed] });
+        await interaction.deferUpdate();
+    }
+
+    // Cerrar ticket
+    else if (interaction.customId === 'ticket_close') {
+        const channel = interaction.channel;
+        await interaction.reply({ content: '🔒 Cerrando ticket en 5 segundos...', ephemeral: true });
+        setTimeout(() => channel.delete().catch(() => {}), 5000);
     }
 });
 
@@ -191,7 +230,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('Actualizando comandos de slash...');
-        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands }); // Cambia a tu ID de aplicación
+        await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands }); // Cambia a tu ID
         console.log('Comandos actualizados correctamente.');
     } catch (err) {
         console.error('Error al registrar comandos:', err);
@@ -202,23 +241,10 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'sugerir') return;
 
-    if (!interaction.guild) {
-        return interaction.reply({
-            content: '❌ Este comando solo puede usarse en un servidor.',
-            flags: 64
-        });
-    }
-
     try {
         await interaction.deferReply({ flags: 64 });
         const suggestion = interaction.options.getString('mensaje');
         const suggestionChannel = await interaction.guild.channels.fetch('1340503280987541534');
-
-        if (!suggestionChannel || suggestionChannel.type !== ChannelType.GuildText) {
-            return interaction.editReply({
-                content: '❌ Canal de sugerencias inválido o no accesible.'
-            });
-        }
 
         const embed = new EmbedBuilder()
             .setColor('#00FF00')
@@ -239,52 +265,12 @@ client.on('interactionCreate', async interaction => {
         });
     } catch (err) {
         console.error('Error en /sugerir:', err);
-        if (interaction.deferred) {
-            await interaction.editReply({
-                content: '❌ Ocurrió un error al enviar la sugerencia.'
-            });
-        } else {
-            await interaction.reply({
-                content: '❌ Error inesperado al procesar la sugerencia.',
-                flags: 64
-            });
-        }
+        await interaction.editReply({ content: '❌ Ocurrió un error.' });
     }
 });
 
 // ============================
-// Comando !boost
-// ============================
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
-    if (message.content.toLowerCase() !== '!boost') return;
-
-    const boostChannel = message.guild.channels.cache.find(
-        ch => ch.name === '『💎』boots' && ch.type === ChannelType.GuildText
-    );
-
-    if (!boostChannel) return message.reply('❌ No se encontró el canal 『💎』boots.');
-
-    const embed = new EmbedBuilder()
-        .setColor('#ff69b4')
-        .setTitle('🚀 -_ ¡NUEVO BOOST! -_ 🚀')
-        .setDescription(`
-✨ -_ ¡Gracias por tu apoyo, ${message.author.username}! -_ ✨
-━━━━━━━━━━━━━━━━━━━━━━
-💖 -_ Usuario: ${message.author.tag} -_
-🎁 -_ Beneficio: ¡El servidor se hace más fuerte gracias a ti! -_
-━━━━━━━━━━━━━━━━━━━━━━
-        `)
-        .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-        .setImage('https://media.giphy.com/media/l0MYC0LajbaPoEADu/giphy.gif')
-        .setFooter({ text: 'Power Luki Network -_ • ¡Cada boost cuenta! -_' })
-        .setTimestamp();
-
-    await boostChannel.send({ embeds: [embed] });
-});
-
-// ============================
-// ///// EVENTO: _-_ SISTEMA DE NIVELES _-_ /////
+// Sistema de niveles
 // ============================
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
@@ -296,30 +282,18 @@ client.on('messageCreate', async message => {
     levels.users[userId].xp += xp;
 
     const xpToNext = levels.users[userId].level * 100;
-
     if (levels.users[userId].xp >= xpToNext) {
         levels.users[userId].level += 1;
         levels.users[userId].xp -= xpToNext;
 
-        const levelUpEmbed = new EmbedBuilder()
+        const embed = new EmbedBuilder()
             .setColor('#00FFFF')
             .setTitle(`🌟 ¡LEVEL UP! 🌟`)
-            .setDescription(`
-╭━━━━━✨━━━━━╮
-💠 ¡Felicidades <@${userId}>!
-💎 Has subido al **Nivel ${levels.users[userId].level}**
-╰━━━━━✨━━━━━╯
-            `)
-            .addFields(
-                { name: '💥 Experiencia total', value: `${levels.users[userId].xp} XP`, inline: true },
-                { name: '🏆 Próximo nivel', value: `${xpToNext} XP necesarios`, inline: true }
-            )
-            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-            .setFooter({ text: 'Power Luki Network • Sistema de Niveles' })
-            .setTimestamp();
+            .setDescription(`🎉 <@${userId}> ha subido al **Nivel ${levels.users[userId].level}** 🎉`)
+            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }));
 
         const levelChannel = message.guild.channels.cache.find(ch => ch.name === '『🆙』niveles');
-        if (levelChannel) levelChannel.send({ embeds: [levelUpEmbed] });
+        if (levelChannel) levelChannel.send({ embeds: [embed] });
     }
 
     saveLevels();
@@ -339,33 +313,13 @@ client.on('messageCreate', async message => {
         if (!user.bannable) return message.reply('❌ No puedo banear a ese usuario.');
 
         const reason = args.slice(2).join(' ') || 'No especificada';
-        try {
-            await user.ban({ reason });
-            message.reply(`✅ ${user.user.tag} fue baneado.`);
-
-            const logChannel = message.guild.channels.cache.find(
-                ch => ch.name === '『🔨』baneos' && ch.type === ChannelType.GuildText
-            );
-            if (logChannel) {
-                const embed = new EmbedBuilder()
-                    .setColor('#FF0000')
-                    .setTitle('🔨 Usuario Baneado')
-                    .addFields(
-                        { name: 'Usuario', value: user.user.tag },
-                        { name: 'Por', value: message.author.tag },
-                        { name: 'Razón', value: reason }
-                    );
-                logChannel.send({ embeds: [embed] });
-            }
-        } catch (err) {
-            console.error(err);
-            message.reply('❌ Error al intentar banear al usuario.');
-        }
+        await user.ban({ reason });
+        message.reply(`✅ ${user.user.tag} fue baneado.`);
     }
 });
 
 // ============================
-// Servidor web para Render
+// Servidor web Render
 // ============================
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot Power_luki NETWORK activo en Render'));
@@ -376,4 +330,3 @@ app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT
 // Login del bot
 // ============================
 client.login(process.env.TOKEN);
-
