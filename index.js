@@ -22,9 +22,6 @@ let banConfig = JSON.parse(fs.readFileSync('./banConfig.json', 'utf8'));
 let invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
 const guildInvites = new Map();
 
-// ============================
-// Niveles
-// ============================
 let levels = { users: {} };
 if (fs.existsSync('./levels.json')) {
   levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
@@ -48,9 +45,9 @@ const client = new Client({
 });
 
 // ============================
-// Evento Ready (v15 usa clientReady)
+// Evento Ready
 // ============================
-client.once('clientReady', async () => {
+client.once('ready', async () => {
   console.log(`✅ Bot conectado como ${client.user.tag}`);
 
   for (const guild of client.guilds.cache.values()) {
@@ -99,15 +96,6 @@ client.once('clientReady', async () => {
 });
 
 // ============================
-// Comando simple
-// ============================
-client.on('messageCreate', message => {
-  if (message.content === '!hola') {
-    message.reply('👋 ¡Hola! Soy tu bot.');
-  }
-});
-
-// ============================
 // Bienvenida personalizada
 // ============================
 client.on('guildMemberAdd', async member => {
@@ -136,25 +124,14 @@ client.on('guildMemberAdd', async member => {
 });
 
 // ============================
-// Manejo de Interacciones (botones + slash juntos)
+// Manejo de Interacciones (Tickets + Slash)
 // ============================
-
-/*
-  Nota importante sobre la lógica:
-   - Los botones del panel (ticket_soporte, ticket_reportes, ticket_otros, ticket_compras)
-     CREAN tickets.
-   - Los botones dentro de cada ticket tendrán IDs únicos basados en el ID del canal:
-     -> ticket_claim_<channelId>
-     -> ticket_close_<channelId>
-   - De esta forma reclamar/cerrar nunca volverá a crear tickets.
-*/
-
 client.on('interactionCreate', async interaction => {
 
-  // ======= SLASH COMMAND: /sugerir =======
+  // SLASH COMMAND: /sugerir
   if (interaction.isChatInputCommand() && interaction.commandName === 'sugerir') {
     try {
-      await interaction.deferReply({ flags: 64 });
+      await interaction.deferReply({ ephemeral: true });
       const suggestion = interaction.options.getString('mensaje');
       const suggestionChannel = await interaction.guild.channels.fetch('1340503280987541534');
 
@@ -172,46 +149,32 @@ client.on('interactionCreate', async interaction => {
       await msg.react('✅');
       await msg.react('❌');
 
-      await interaction.editReply({
-        content: '✅ Tu sugerencia ha sido enviada correctamente.'
-      });
+      await interaction.editReply({ content: '✅ Tu sugerencia ha sido enviada correctamente.' });
     } catch (err) {
       console.error('Error en /sugerir:', err);
-      if (!interaction.replied) {
-        await interaction.editReply({ content: '❌ Ocurrió un error.' });
-      }
+      if (!interaction.replied) await interaction.editReply({ content: '❌ Ocurrió un error.' });
     }
   }
 
-  // ======= BOTONES =======
   if (!interaction.isButton()) return;
   if (!interaction.guild) return;
 
-  // -- Definimos categorías válidas del panel para crear tickets --
   const allowedPanelIds = ['ticket_soporte', 'ticket_reportes', 'ticket_otros', 'ticket_compras'];
 
   try {
-    // 1) CREAR TICKET: solo si el customId es EXACTAMENTE una de las del panel
+    // 1) CREAR TICKET
     if (allowedPanelIds.includes(interaction.customId)) {
-      // defer rápido para evitar "Unknown interaction"
-      await interaction.deferReply({ flags: 64 });
-
+      await interaction.deferReply({ ephemeral: true });
       const category = interaction.customId.replace('ticket_', '');
-      const guild = interaction.guild;
+      const existing = interaction.guild.channels.cache.find(c => c.name === `ticket-${interaction.user.username}`);
+      
+      if (existing) return interaction.editReply({ content: `⚠️ Ya tienes un ticket abierto: ${existing}.` });
 
-      // Evitar abrir más de 1 ticket por usuario con mismo nombre
-      const existing = guild.channels.cache.find(c => c.name === `ticket-${interaction.user.username}`);
-      if (existing) {
-        return interaction.editReply({
-          content: `⚠️ Ya tienes un ticket abierto: ${existing}.`
-        });
-      }
-
-      const ticketChannel = await guild.channels.create({
+      const ticketChannel = await interaction.guild.channels.create({
         name: `ticket-${interaction.user.username}`,
         type: ChannelType.GuildText,
         permissionOverwrites: [
-          { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+          { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
           { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
           { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.ManageMessages] }
         ]
@@ -220,130 +183,47 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setColor('#00BFFF')
         .setTitle(`🎫 Ticket de ${category.toUpperCase()}`)
-        .setDescription(`
-Hola ${interaction.user}, un miembro del staff te atenderá pronto.
-
-Usa los botones a continuación:
-- 🎟️ **Reclamar**: Un staff se hace cargo.
-- 🔒 **Cerrar**: Cierra el ticket.
-        `)
+        .setDescription(`Hola ${interaction.user}, un miembro del staff te atenderá pronto.\n\nUsa los botones a continuación:\n- 🎟️ **Reclamar**: Un staff se hace cargo.\n- 🔒 **Cerrar**: Cierra el ticket.`)
         .setFooter({ text: 'Power Luki Network • Sistema de Tickets' });
 
-      // IMPORTANT: usamos el ID del canal para los botones del ticket, así son únicos
       const ticketButtons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`ticket_claim_${ticketChannel.id}`).setLabel('🎟️ Reclamar').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`ticket_close_${ticketChannel.id}`).setLabel('🔒 Cerrar').setStyle(ButtonStyle.Danger)
       );
 
       await ticketChannel.send({ embeds: [embed], components: [ticketButtons] });
-
-      await interaction.editReply({
-        content: `✅ Ticket creado correctamente en ${ticketChannel}.`
-      });
-
-      return; // terminado
+      await interaction.editReply({ content: `✅ Ticket creado en ${ticketChannel}.` });
+      return;
     }
 
-    // 2) RECLAMAR: customId = ticket_claim_<channelId>
+    // 2) RECLAMAR
     if (interaction.customId.startsWith('ticket_claim_')) {
-      // responder rápido
-      await interaction.deferReply({ flags: 64 });
-
-      // extraer channelId
-      const parts = interaction.customId.split('_');
-      const channelId = parts.slice(2).join('_'); // por si acaso hay guiones en ids (no debería)
-
-      // obtener canal objetivo (puede no estar en cache)
-      const targetChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
-      if (!targetChannel) {
-        return interaction.editReply({ content: '❌ Canal del ticket no encontrado o ya eliminado.' });
-      }
-
-      // permisos: solo staff
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-        return interaction.editReply({ content: '❌ No tienes permiso para reclamar tickets.' });
-      }
-
+      await interaction.deferReply({ ephemeral: true });
+      if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return interaction.editReply({ content: '❌ No tienes permiso.' });
+      
       const embed = new EmbedBuilder()
         .setColor('#FFD700')
         .setTitle('🎟️ Ticket reclamado')
         .setDescription(`Este ticket ha sido reclamado por <@${interaction.user.id}>.`);
 
-      await targetChannel.send({ embeds: [embed] });
-      await interaction.editReply({ content: '✅ Ticket reclamado correctamente.' });
-
-      return;
+      await interaction.channel.send({ embeds: [embed] });
+      await interaction.editReply({ content: '✅ Reclamado.' });
     }
 
-    // 3) CERRAR: customId = ticket_close_<channelId>
+    // 3) CERRAR
     if (interaction.customId.startsWith('ticket_close_')) {
-      await interaction.deferReply({ flags: 64 });
-
-      const parts = interaction.customId.split('_');
-      const channelId = parts.slice(2).join('_');
-
-      const targetChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
-      if (!targetChannel) {
-        return interaction.editReply({ content: '❌ Canal del ticket no encontrado o ya eliminado.' });
-      }
-
-      // opcional: solo staff o el creador pueden cerrar
-      const memberIsStaff = interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages);
-      const channelMention = `<#${channelId}>`;
-
-      await interaction.editReply({ content: `🔒 Cerrando ${channelMention} en 5 segundos...` });
-
-      // dar 5s para que se vea el mensaje y luego eliminar
-      setTimeout(() => targetChannel.delete().catch(() => {}), 5000);
-
-      return;
+      await interaction.deferReply({ ephemeral: true });
+      await interaction.editReply({ content: `🔒 Cerrando ticket en 5 segundos...` });
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
-
-    // Si llega aquí: customId no reconocido -> ignorar
-  } catch (err) {
-    console.error('Error manejando interacción de botón:', err);
-    // si la interacción fue deferida, intentamos editar la respuesta
-    try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ content: '❌ Ocurrió un error al procesar la interacción.' });
-      } else {
-        await interaction.reply({ content: '❌ Ocurrió un error al procesar la interacción.', flags: 64 });
-      }
-    } catch (e) {
-      console.error('Error al notificar fallo al usuario:', e);
-    }
-  }
+  } catch (err) { console.error(err); }
 });
 
 // ============================
-// Registrar slash /sugerir
-// ============================
-const commands = [
-  new SlashCommandBuilder()
-    .setName('sugerir')
-    .setDescription('Envía una sugerencia al canal de sugerencias')
-    .addStringOption(option =>
-      option.setName('mensaje').setDescription('Escribe tu sugerencia').setRequired(true)
-    )
-].map(cmd => cmd.toJSON());
-
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-(async () => {
-  try {
-    console.log('Actualizando comandos de slash...');
-    await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands });
-    console.log('Comandos actualizados correctamente.');
-  } catch (err) {
-    console.error('Error al registrar comandos:', err);
-  }
-})();
-
-// ============================
-// Sistema de niveles
+// Sistema de Niveles
 // ============================
 client.on('messageCreate', async message => {
-  if (message.author.bot) return;
+  if (message.author.bot || !message.guild) return;
 
   const userId = message.author.id;
   if (!levels.users[userId]) levels.users[userId] = { xp: 0, level: 1 };
@@ -365,42 +245,106 @@ client.on('messageCreate', async message => {
     const levelChannel = message.guild.channels.cache.find(ch => ch.name === '『🆙』niveles');
     if (levelChannel) levelChannel.send({ embeds: [embed] });
   }
-
   saveLevels();
 });
 
-// ============================
-// Sistema de baneos
-// ============================
+// ============================================
+// MODERACIÓN: Ban, Silenciar y Unmute
+// ============================================
 client.on('messageCreate', async message => {
-  if (!message.guild || !message.member) return;
-  if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return;
+  if (!message.guild || !message.member || message.author.bot) return;
 
   const args = message.content.trim().split(/ +/g);
-  if (args[0] === '!ban') {
-    const user = message.mentions.members.first();
-    if (!user) return message.reply('❌ Menciona un usuario para banear.');
-    if (!user.bannable) return message.reply('❌ No puedo banear a ese usuario.');
+  const command = args[0].toLowerCase();
 
+  // !BAN
+  if (command === '!ban') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return;
+    const user = message.mentions.members.first();
+    if (!user) return message.reply('❌ Menciona un usuario.');
+    if (!user.bannable) return message.reply('❌ No puedo banearlo.');
     const reason = args.slice(2).join(' ') || 'No especificada';
     await user.ban({ reason });
-    message.reply(`✅ ${user.user.tag} fue baneado.`);
+    message.reply(`✅ ${user.user.tag} baneado.`);
+  }
+
+  // !MUTE / !SILENCIAR
+  if (command === '!mute' || command === '!silenciar') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ Sin permisos.');
+
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('❌ Menciona a alguien.');
+    const reason = args.slice(2).join(' ') || 'No especificada';
+
+    let muteRole = message.guild.roles.cache.find(r => r.name === 'Silenciado');
+    if (!muteRole) {
+      muteRole = await message.guild.roles.create({
+        name: 'Silenciado', color: '#515864', permissions: []
+      });
+      message.guild.channels.cache.forEach(async (channel) => {
+        try {
+          await channel.permissionOverwrites.edit(muteRole, { SendMessages: false, Speak: false, AddReactions: false });
+        } catch (e) {}
+      });
+    }
+
+    try {
+      await target.roles.add(muteRole);
+      message.reply(`✅ **${target.user.tag}** silenciado.`);
+
+      const logChannel = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
+      if (logChannel) {
+        const embed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('🔇 Usuario Silenciado')
+          .addFields(
+            { name: '👤 Usuario', value: target.user.tag, inline: true },
+            { name: '🛡️ Moderador', value: message.author.tag, inline: true },
+            { name: '📄 Motivo', value: reason }
+          )
+          .setTimestamp();
+        logChannel.send({ embeds: [embed] });
+      }
+    } catch (err) { message.reply('❌ Error al silenciar.'); }
+  }
+
+  // !UNMUTE (Para quitar el silencio)
+  if (command === '!unmute') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+    const target = message.mentions.members.first();
+    const muteRole = message.guild.roles.cache.find(r => r.name === 'Silenciado');
+    if (target && muteRole) {
+      await target.roles.remove(muteRole);
+      message.reply(`✅ Silencio retirado a **${target.user.tag}**.`);
+    }
   }
 });
 
 // ============================
-// Servidor web Render
+// Slash Command Registration
+// ============================
+const commands = [
+  new SlashCommandBuilder()
+    .setName('sugerir')
+    .setDescription('Envía una sugerencia')
+    .addStringOption(opt => opt.setName('mensaje').setDescription('Tu sugerencia').setRequired(true))
+].map(cmd => cmd.toJSON());
+
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+(async () => {
+  try {
+    await rest.put(Routes.applicationCommands('1433313752488607821'), { body: commands });
+    console.log('✅ Comandos Slash registrados.');
+  } catch (err) { console.error(err); }
+})();
+
+// ============================
+// Web Server & Login
 // ============================
 const app = express();
-app.get('/', (req, res) => res.send('✅ Bot Power_luki NETWORK activo en Render'));
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🌐 Servidor web activo en el puerto ${PORT}`));
-
-// ============================
-// Login
-// ============================
+app.get('/', (req, res) => res.send('✅ Bot Power_luki activo'));
+app.listen(process.env.PORT || 10000);
 client.login(process.env.TOKEN);
-
 
 
 
