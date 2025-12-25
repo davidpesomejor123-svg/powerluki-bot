@@ -115,7 +115,6 @@ client.on('messageCreate', async message => {
 
             if (logMute) logMute.send({ embeds: [muteEmbed] });
             message.reply(`✅ **${target.user.tag}** silenciado por ${timeInput}.`);
-            target.send(`⚠️ Has sido silenciado en **Power Lucky**. Razón: ${reason}.`).catch(() => {});
 
             setTimeout(async () => {
                 const logUnmute = message.guild.channels.cache.find(c => c.name.includes('desilenciados'));
@@ -152,8 +151,8 @@ client.on('interactionCreate', async i => {
             .setTitle(`🎫 Ticket de ${cat.toUpperCase()}`)
             .setDescription(`Hola ${i.user}, el Staff te atenderá pronto.`);
 
-        await ch.send({ embeds: [embed], components: [row] });
-        i.reply({ content: `✅ Ticket abierto en ${ch}`, ephemeral: true });
+            await ch.send({ embeds: [embed], components: [row] });
+            i.reply({ content: `✅ Ticket abierto en ${ch}`, ephemeral: true });
     }
 
     if (i.customId === 'claim_tk') {
@@ -185,8 +184,8 @@ client.once('ready', async () => {
                     '💠 *no abrir ticket innecesariamente*\n' +
                     '💠'
                 )
-                // HE USADO EL LINK DIRECTO DE TU IMAGEN PARA QUE SE VEA SIEMPRE
-                .setImage('https://i.imgur.com/8N0nI9c.png') 
+                // Usando tu enlace directo de Postimages
+                .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png') 
                 .setFooter({ text: 'Power Lucky Support | Ticket' });
 
             const row = new ActionRowBuilder().addComponents(
@@ -198,9 +197,9 @@ client.once('ready', async () => {
 
             try {
                 await ticketChannel.send({ embeds: [embed], components: [row] });
-                console.log(`🎫 Panel enviado a #${ticketChannel.name}`);
+                console.log(`🎫 Panel enviado correctamente a #${ticketChannel.name}`);
             } catch (error) {
-                console.log(`❌ Error: ${error.message}`);
+                console.log(`❌ Error al enviar el panel: ${error.message}`);
             }
         }
     }, 3000);
