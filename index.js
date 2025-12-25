@@ -34,7 +34,6 @@ client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
   const userId = message.author.id;
 
-  // Lógica Anti-Spam (Mute automático 5m)
   const now = Date.now();
   const userData = msgCooldown.get(userId) || { count: 0, lastMsg: now };
   if (now - userData.lastMsg < 5000) userData.count++;
@@ -51,7 +50,6 @@ client.on('messageCreate', async message => {
     } catch (e) { console.log("Error en auto-mute spam"); }
   }
 
-  // Lógica de Niveles hasta 999
   if (!levels.users[userId]) levels.users[userId] = { xp: 0, level: 1 };
   if (levels.users[userId].level < 999) {
     levels.users[userId].xp += Math.floor(Math.random() * 10) + 15;
@@ -75,7 +73,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// --- COMANDO MUTE (TU LÓGICA INTEGRADA) ---
+// --- COMANDO MUTE ---
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.content.startsWith('!')) return;
     const args = message.content.slice(1).trim().split(/ +/);
@@ -85,7 +83,7 @@ client.on('messageCreate', async message => {
         if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
         
         const target = message.mentions.members.first();
-        const timeInput = args[1]; // Agarrando tu lógica de args[1]
+        const timeInput = args[1];
         const reason = args.slice(2).join(' ') || 'No especificada';
 
         if (!target || !timeInput) return message.reply("Usa: !mute @usuario <tiempo> [razón]");
@@ -104,7 +102,6 @@ client.on('messageCreate', async message => {
 
         try {
             await target.timeout(timeInMs, reason);
-            
             const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
             const muteEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
@@ -118,56 +115,22 @@ client.on('messageCreate', async message => {
 
             if (logMute) logMute.send({ embeds: [muteEmbed] });
             message.reply(`✅ **${target.user.tag}** silenciado por ${timeInput}.`);
+            target.send(`⚠️ Has sido silenciado en **Power Lucky**. Razón: ${reason}.`).catch(() => {});
 
-            // Notificación al usuario
-            target.send(`⚠️ Has sido silenciado en **Power Lucky**. Razón: ${reason}. **Aprende a respetar las normas.**`).catch(() => {});
-
-            // Log de desilencio automático
             setTimeout(async () => {
                 const logUnmute = message.guild.channels.cache.find(c => c.name === '『🔉』desilenciados');
                 if (logUnmute) logUnmute.send(`🔊 El usuario **${target.user.tag}** ha sido desilenciado automáticamente.`);
             }, timeInMs);
-
         } catch (err) {
-            message.reply("❌ No pude silenciar al usuario. Revisa mis permisos.");
+            message.reply("❌ No pude silenciar al usuario.");
         }
     }
 });
 
-// --- COMANDO PARA ENVIAR EL PANEL DE TICKETS (NUEVO) ---
-client.on('messageCreate', async message => {
-    if (message.content === '!setup-tickets') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
-
-        const embed = new EmbedBuilder()
-            .setColor('#0099FF')
-            .setDescription(
-                '⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n' +
-                '⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n' +
-                '‼️ **Otros:** Diferentes categorías\n' +
-                '🛒 **Compras:** Dudas sobre artículos o servicios\n\n' +
-                '💠 *no abrir ticket innecesariamente*\n' +
-                '💠'
-            )
-            .setImage('https://i.imgur.com/eBf72X4.png') // Tu imagen de Power Lucky
-            .setFooter({ text: 'Power Lucky Support | Ticket' });
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('ticket_support').setLabel('Support').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_reports').setLabel('Reports').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_others').setLabel('Others').setEmoji('‼️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_purchase').setLabel('Purchase').setEmoji('🛒').setStyle(ButtonStyle.Success)
-        );
-
-        message.channel.send({ embeds: [embed], components: [row] });
-    }
-});
-
-// --- SISTEMA DE TICKETS CORREGIDO ---
+// --- SISTEMA DE TICKETS (INTERACCIONES) ---
 client.on('interactionCreate', async i => {
     if (!i.isButton()) return;
 
-    // Crear Ticket
     if (i.customId.startsWith('ticket_')) {
         const cat = i.customId.split('_')[1];
         const ch = await i.guild.channels.create({
@@ -193,20 +156,55 @@ client.on('interactionCreate', async i => {
         i.reply({ content: `✅ Ticket abierto en ${ch}`, ephemeral: true });
     }
 
-    // Reclamar Ticket
     if (i.customId === 'claim_tk') {
         if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return i.reply({ content: '❌ Solo Staff.', ephemeral: true });
         i.reply({ content: `🎟️ Ticket reclamado por **${i.user.tag}**` });
     }
 
-    // Cerrar con 5 segundos de espera
     if (i.customId === 'close_tk') {
         await i.reply('🔒 Cerrando ticket en **5 segundos**...');
         setTimeout(() => i.channel.delete().catch(() => {}), 5000);
     }
 });
 
-client.once('ready', () => console.log('✅ Power Lucky Online con Mute y Tickets corregidos'));
+// --- FUNCIÓN PARA ENVIAR EL PANEL AUTOMÁTICAMENTE ---
+client.once('ready', async () => {
+    console.log('✅ Power Lucky Online');
+
+    // Buscar el canal específico por nombre
+    const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets');
+
+    if (ticketChannel) {
+        // Opcional: Borrar mensajes antiguos para que no se repita el panel
+        // await ticketChannel.bulkDelete(10).catch(() => {}); 
+
+        const embed = new EmbedBuilder()
+            .setColor('#0099FF')
+            .setDescription(
+                '⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n' +
+                '⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n' +
+                '‼️ **Otros:** Diferentes categorías\n' +
+                '🛒 **Compras:** Dudas sobre artículos o servicios\n\n' +
+                '💠 *no abrir ticket innecesariamente*\n' +
+                '💠'
+            )
+            .setImage('https://i.imgur.com/eBf72X4.png')
+            .setFooter({ text: 'Power Lucky Support | Ticket' });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('ticket_support').setLabel('Support').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_reports').setLabel('Reports').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_others').setLabel('Others').setEmoji('‼️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_purchase').setLabel('Purchase').setEmoji('🛒').setStyle(ButtonStyle.Success)
+        );
+
+        ticketChannel.send({ embeds: [embed], components: [row] });
+        console.log('🎫 Panel de tickets enviado automáticamente a 『📖』tickets');
+    } else {
+        console.log('❌ No se encontró el canal 『📖』tickets');
+    }
+});
+
 const app = express();
 app.get('/', (req, res) => res.send('Bot Online'));
 app.listen(10000);
