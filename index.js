@@ -44,7 +44,7 @@ client.on('messageCreate', async message => {
   if (userData.count > 5 && !message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
     try {
         await message.member.timeout(300000, "Spam detectado");
-        const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
+        const logMute = message.guild.channels.cache.find(ch => ch.name.includes('silenciados'));
         if (logMute) logMute.send(`🛡️ ${message.author} ha sido silenciado **5 minutos** por Spam.`);
         return;
     } catch (e) { console.log("Error en auto-mute spam"); }
@@ -58,7 +58,7 @@ client.on('messageCreate', async message => {
     if (levels.users[userId].xp >= xpNeeded) {
       levels.users[userId].level++;
       levels.users[userId].xp = 0;
-      const lvCh = message.guild.channels.cache.find(c => c.name === '『🆙』niveles');
+      const lvCh = message.guild.channels.cache.find(c => c.name.includes('niveles'));
       if (lvCh) {
         const embed = new EmbedBuilder()
           .setColor('#FFD700')
@@ -102,7 +102,7 @@ client.on('messageCreate', async message => {
 
         try {
             await target.timeout(timeInMs, reason);
-            const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
+            const logMute = message.guild.channels.cache.find(ch => ch.name.includes('silenciados'));
             const muteEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('🚫 Usuario Silenciado')
@@ -118,7 +118,7 @@ client.on('messageCreate', async message => {
             target.send(`⚠️ Has sido silenciado en **Power Lucky**. Razón: ${reason}.`).catch(() => {});
 
             setTimeout(async () => {
-                const logUnmute = message.guild.channels.cache.find(c => c.name === '『🔉』desilenciados');
+                const logUnmute = message.guild.channels.cache.find(c => c.name.includes('desilenciados'));
                 if (logUnmute) logUnmute.send(`🔊 El usuario **${target.user.tag}** ha sido desilenciado automáticamente.`);
             }, timeInMs);
         } catch (err) {
@@ -167,42 +167,47 @@ client.on('interactionCreate', async i => {
     }
 });
 
-// --- FUNCIÓN PARA ENVIAR EL PANEL AUTOMÁTICAMENTE ---
+// --- FUNCIÓN DE AUTO-ENVÍO AL INICIAR ---
 client.once('ready', async () => {
     console.log('✅ Power Lucky Online');
 
-    // Buscar el canal específico por nombre
-    const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets');
+    // Esperar 3 segundos para asegurar que los canales carguen bien
+    setTimeout(async () => {
+        // Busca el canal que contenga "tickets" en su nombre
+        const ticketChannel = client.channels.cache.find(ch => ch.name.includes('tickets'));
 
-    if (ticketChannel) {
-        // Opcional: Borrar mensajes antiguos para que no se repita el panel
-        // await ticketChannel.bulkDelete(10).catch(() => {}); 
+        if (ticketChannel) {
+            const embed = new EmbedBuilder()
+                .setColor('#0099FF')
+                .setDescription(
+                    '⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n' +
+                    '⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n' +
+                    '‼️ **Otros:** Diferentes categorías\n' +
+                    '🛒 **Compras:** Dudas sobre artículos o servicios\n\n' +
+                    '💠 *no abrir ticket innecesariamente*\n' +
+                    '💠'
+                )
+                .setImage('https://i.imgur.com/eBf72X4.png')
+                .setFooter({ text: 'Power Lucky Support | Ticket' });
 
-        const embed = new EmbedBuilder()
-            .setColor('#0099FF')
-            .setDescription(
-                '⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n' +
-                '⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n' +
-                '‼️ **Otros:** Diferentes categorías\n' +
-                '🛒 **Compras:** Dudas sobre artículos o servicios\n\n' +
-                '💠 *no abrir ticket innecesariamente*\n' +
-                '💠'
-            )
-            .setImage('https://i.imgur.com/eBf72X4.png')
-            .setFooter({ text: 'Power Lucky Support | Ticket' });
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('ticket_support').setLabel('Support').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('ticket_reports').setLabel('Reports').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('ticket_others').setLabel('Others').setEmoji('‼️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('ticket_purchase').setLabel('Purchase').setEmoji('🛒').setStyle(ButtonStyle.Success)
+            );
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('ticket_support').setLabel('Support').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_reports').setLabel('Reports').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_others').setLabel('Others').setEmoji('‼️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_purchase').setLabel('Purchase').setEmoji('🛒').setStyle(ButtonStyle.Success)
-        );
-
-        ticketChannel.send({ embeds: [embed], components: [row] });
-        console.log('🎫 Panel de tickets enviado automáticamente a 『📖』tickets');
-    } else {
-        console.log('❌ No se encontró el canal 『📖』tickets');
-    }
+            // Intentar enviar el mensaje
+            try {
+                await ticketChannel.send({ embeds: [embed], components: [row] });
+                console.log(`🎫 Panel enviado a #${ticketChannel.name}`);
+            } catch (error) {
+                console.log(`❌ Error al enviar mensaje: Revisa si el bot tiene permisos en #${ticketChannel.name}`);
+            }
+        } else {
+            console.log('❌ No encontré ningún canal con la palabra "tickets" en el nombre.');
+        }
+    }, 3000);
 });
 
 const app = express();
