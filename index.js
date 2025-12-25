@@ -32,9 +32,6 @@ function saveLevels() {
 const MIN_XP = 10;
 const MAX_XP = 20;
 
-// ============================
-// Client
-// ============================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -214,7 +211,7 @@ client.on('messageCreate', async message => {
 });
 
 // ============================================
-// MODERACIÓN CORREGIDA (Mute con tiempo)
+// MODERACIÓN AVANZADA: Mute con Embeds Pro
 // ============================================
 client.on('messageCreate', async message => {
   if (!message.guild || !message.member || message.author.bot) return;
@@ -222,24 +219,15 @@ client.on('messageCreate', async message => {
   const args = message.content.trim().split(/ +/g);
   const command = args[0].toLowerCase();
 
-  if (command === '!ban') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return;
-    const user = message.mentions.members.first();
-    if (!user) return message.reply('❌ Menciona un usuario.');
-    const reason = args.slice(2).join(' ') || 'No especificada';
-    await user.ban({ reason });
-    message.reply(`✅ ${user.user.tag} baneado.`);
-  }
-
   if (command === '!mute' || command === '!silenciar') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ Sin permisos.');
 
     const target = message.mentions.members.first();
-    // Busca automáticamente el argumento que tiene el formato de tiempo (ej: 10s, 5m)
     const timeArg = args.find(arg => arg.match(/^\d+[smMa]$/)); 
-    
-    if (!target) return message.reply('❌ Menciona a alguien.');
-    if (!timeArg) return message.reply('❌ Tiempo no detectado. Usa: `!mute @usuario 10s` (s=seg, m=min, M=mes, a=año)');
+    const reason = args.slice(2).filter(a => a !== timeArg && !a.includes('<@')).join(' ') || 'No especificada';
+
+    if (!target) return message.reply('❌ Menciona a un usuario.');
+    if (!timeArg) return message.reply('❌ Tiempo inválido. Ejemplo: `!mute @usuario 10s`');
 
     const unit = timeArg.slice(-1);
     const value = parseInt(timeArg);
@@ -252,7 +240,9 @@ client.on('messageCreate', async message => {
       case 'a': timeInMs = value * 365 * 24 * 60 * 60 * 1000; break;
     }
 
+    const endTime = new Date(Date.now() + timeInMs);
     let muteRole = message.guild.roles.cache.find(r => r.name === 'Silenciado');
+    
     if (!muteRole) {
       try {
         muteRole = await message.guild.roles.create({ name: 'Silenciado', color: '#515864' });
@@ -264,31 +254,56 @@ client.on('messageCreate', async message => {
 
     try {
       await target.roles.add(muteRole);
-      message.reply(`✅ **${target.user.tag}** silenciado por **${timeArg}**.`);
 
+      // --- EMBED PARA EL CANAL DE LOGS ---
       const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
-      if (logMute) {
-        const embed = new EmbedBuilder()
-          .setColor('#FF0000')
-          .setTitle('🔇 Usuario Silenciado')
-          .addFields(
-            { name: '👤 Usuario', value: target.user.tag, inline: true },
-            { name: '⏳ Duración', value: timeArg, inline: true }
-          ).setTimestamp();
-        logMute.send({ embeds: [embed] });
-      }
+      const logEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('🚫 Sanción Aplicada: Power Lucky')
+        .setThumbnail(target.user.displayAvatarURL())
+        .addFields(
+          { name: '👤 Usuario Sancionado', value: `${target} (${target.user.tag})`, inline: false },
+          { name: '⏳ Duración', value: `\`${timeArg}\``, inline: true },
+          { name: '🛡️ Moderador', value: `${message.author.tag}`, inline: true },
+          { name: '📄 Razón', value: `\`${reason}\``, inline: false },
+          { name: '⏰ Termina el', value: `<t:${Math.floor(endTime.getTime() / 1000)}:f>`, inline: false }
+        )
+        .setFooter({ text: 'Sistema de Seguridad Power Lucky' })
+        .setTimestamp();
 
+      if (logMute) logMute.send({ embeds: [logEmbed] });
+      message.reply(`✅ ${target} ha sido sancionado correctamente por **${timeArg}**.`);
+
+      // --- EMBED PARA EL USUARIO (MD/DM) ---
+      const dmEmbed = new EmbedBuilder()
+        .setColor('#FF4500')
+        .setTitle('⚠️ Has sido sancionado en Power Lucky Network')
+        .setDescription(`Has recibido un silencio temporal por parte de nuestro sistema de moderación.\n\n**Aprende a respetar las normas para evitar sanciones permanentes.**`)
+        .addFields(
+          { name: '⏳ Tiempo', value: timeArg, inline: true },
+          { name: '📄 Razón', value: reason, inline: true },
+          { name: '📅 Finaliza', value: `<t:${Math.floor(endTime.getTime() / 1000)}:R>` }
+        )
+        .setFooter({ text: 'Power Lucky • Normas de convivencia' });
+
+      target.send({ embeds: [dmEmbed] }).catch(() => console.log("El usuario tiene los DM cerrados."));
+
+      // --- TEMPORIZADOR DE UNMUTE ---
       setTimeout(async () => {
         const member = await message.guild.members.fetch(target.id).catch(() => null);
         if (member && member.roles.cache.has(muteRole.id)) {
           await member.roles.remove(muteRole);
           const logUnmute = message.guild.channels.cache.find(ch => ch.name === '『🔉』desilenciados');
           if (logUnmute) {
-            logUnmute.send(`🔊 El usuario **${target.user.tag}** ha sido desilenciado automáticamente tras **${timeArg}**.`);
+            logUnmute.send(`🔊 El usuario ${target} ha cumplido su sanción de **${timeArg}** y ha sido desilenciado.`);
           }
         }
       }, timeInMs);
-    } catch (err) { message.reply('❌ Error: Revisa mis permisos o jerarquía de roles.'); }
+
+    } catch (err) { 
+        console.error(err);
+        message.reply('❌ No pude silenciar al usuario. Asegúrate de que mi rol esté por encima del suyo.'); 
+    }
   }
 
   if (command === '!unmute') {
@@ -299,13 +314,13 @@ client.on('messageCreate', async message => {
       await target.roles.remove(muteRole);
       message.reply(`✅ Silencio retirado a **${target.user.tag}**.`);
       const logUnmute = message.guild.channels.cache.find(ch => ch.name === '『🔉』desilenciados');
-      if (logUnmute) logUnmute.send(`🔊 **${target.user.tag}** fue desilenciado manualmente.`);
+      if (logUnmute) logUnmute.send(`🔊 **${target.user.tag}** fue desilenciado manualmente por un moderador.`);
     }
   }
 });
 
 // ============================
-// Slash Command Registration
+// Registro de Comandos Slash
 // ============================
 const commands = [
   new SlashCommandBuilder()
