@@ -214,7 +214,7 @@ client.on('messageCreate', async message => {
 });
 
 // ============================================
-// MODERACIÓN: Ban, Silenciar y Unmute
+// MODERACIÓN CORREGIDA (Mute con tiempo)
 // ============================================
 client.on('messageCreate', async message => {
   if (!message.guild || !message.member || message.author.bot) return;
@@ -222,7 +222,6 @@ client.on('messageCreate', async message => {
   const args = message.content.trim().split(/ +/g);
   const command = args[0].toLowerCase();
 
-  // !BAN
   if (command === '!ban') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return;
     const user = message.mentions.members.first();
@@ -232,44 +231,41 @@ client.on('messageCreate', async message => {
     message.reply(`✅ ${user.user.tag} baneado.`);
   }
 
-  // !MUTE / !SILENCIAR
   if (command === '!mute' || command === '!silenciar') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ Sin permisos.');
 
     const target = message.mentions.members.first();
-    const timeArg = args[1]; // Ejemplo: 10s, 5m, 1a
+    // Busca automáticamente el argumento que tiene el formato de tiempo (ej: 10s, 5m)
+    const timeArg = args.find(arg => arg.match(/^\d+[smMa]$/)); 
     
     if (!target) return message.reply('❌ Menciona a alguien.');
-    if (!timeArg) return message.reply('❌ Debes especificar el tiempo (ej: !mute @usuario 10m).');
+    if (!timeArg) return message.reply('❌ Tiempo no detectado. Usa: `!mute @usuario 10s` (s=seg, m=min, M=mes, a=año)');
 
-    // Lógica de tiempo personalizada
     const unit = timeArg.slice(-1);
     const value = parseInt(timeArg);
     let timeInMs = 0;
 
-    if (isNaN(value)) return message.reply('❌ Tiempo inválido. Ejemplo: 10s, 5m, 1M, 1a');
-
     switch (unit) {
-      case 's': timeInMs = value * 1000; break; // Segundos
-      case 'm': timeInMs = value * 60 * 1000; break; // Minutos
-      case 'M': timeInMs = value * 30 * 24 * 60 * 60 * 1000; break; // Meses
-      case 'a': timeInMs = value * 365 * 24 * 60 * 60 * 1000; break; // Años
-      default: return message.reply('❌ Usa unidades válidas: `s` (seg), `m` (min), `M` (meses), `a` (años).');
+      case 's': timeInMs = value * 1000; break;
+      case 'm': timeInMs = value * 60 * 1000; break;
+      case 'M': timeInMs = value * 30 * 24 * 60 * 60 * 1000; break;
+      case 'a': timeInMs = value * 365 * 24 * 60 * 60 * 1000; break;
     }
 
     let muteRole = message.guild.roles.cache.find(r => r.name === 'Silenciado');
     if (!muteRole) {
-      muteRole = await message.guild.roles.create({ name: 'Silenciado', color: '#515864' });
-      message.guild.channels.cache.forEach(async (ch) => {
-        try { await ch.permissionOverwrites.edit(muteRole, { SendMessages: false }); } catch (e) {}
-      });
+      try {
+        muteRole = await message.guild.roles.create({ name: 'Silenciado', color: '#515864' });
+        message.guild.channels.cache.forEach(async (ch) => {
+          try { await ch.permissionOverwrites.edit(muteRole, { SendMessages: false }); } catch (e) {}
+        });
+      } catch (e) { console.error(e); }
     }
 
     try {
       await target.roles.add(muteRole);
       message.reply(`✅ **${target.user.tag}** silenciado por **${timeArg}**.`);
 
-      // Log Silenciados
       const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
       if (logMute) {
         const embed = new EmbedBuilder()
@@ -282,21 +278,19 @@ client.on('messageCreate', async message => {
         logMute.send({ embeds: [embed] });
       }
 
-      // Temporizador para desilenciar
       setTimeout(async () => {
-        if (target.roles.cache.has(muteRole.id)) {
-          await target.roles.remove(muteRole);
+        const member = await message.guild.members.fetch(target.id).catch(() => null);
+        if (member && member.roles.cache.has(muteRole.id)) {
+          await member.roles.remove(muteRole);
           const logUnmute = message.guild.channels.cache.find(ch => ch.name === '『🔉』desilenciados');
           if (logUnmute) {
             logUnmute.send(`🔊 El usuario **${target.user.tag}** ha sido desilenciado automáticamente tras **${timeArg}**.`);
           }
         }
       }, timeInMs);
-
-    } catch (err) { message.reply('❌ Error al silenciar.'); }
+    } catch (err) { message.reply('❌ Error: Revisa mis permisos o jerarquía de roles.'); }
   }
 
-  // !UNMUTE
   if (command === '!unmute') {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
     const target = message.mentions.members.first();
@@ -311,7 +305,7 @@ client.on('messageCreate', async message => {
 });
 
 // ============================
-// Slash Commands y Registro
+// Slash Command Registration
 // ============================
 const commands = [
   new SlashCommandBuilder()
