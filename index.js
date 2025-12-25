@@ -9,95 +9,26 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  PermissionsBitField,
-  SlashCommandBuilder,
-  REST,
-  Routes
+  PermissionsBitField
 } from 'discord.js';
 
-// ============================
-// CONFIGURACIÓN Y BASES DE DATOS
-// ============================
+// --- BASES DE DATOS ---
 let levels = { users: {} };
-if (fs.existsSync('./levels.json')) {
-  levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
-}
-function saveLevels() {
-  fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
-}
+if (fs.existsSync('./levels.json')) levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
+const saveLevels = () => fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
 
 const msgCooldown = new Map();
-const joinCooldown = [];
-
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-// ============================
-// EVENTO READY
-// ============================
-client.once('ready', async () => {
-  console.log(`✅ Power Lucky Bot conectado como ${client.user.tag}`);
-
-  const ticketChannel = client.channels.cache.find(ch => ch.name === '『📖』tickets');
-  if (ticketChannel) {
-    const messages = await ticketChannel.messages.fetch({ limit: 10 });
-    if (!messages.some(m => m.author.id === client.user.id)) {
-      const embed = new EmbedBuilder()
-        .setColor('#00BFFF')
-        .setTitle('⚠️ Sistema de Tickets | Power Lucky Studios ⚠️')
-        .setDescription('Selecciona una categoría para recibir ayuda del Staff.')
-        .setFooter({ text: 'Power Lucky Network' });
-
-      const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success)
-      );
-      await ticketChannel.send({ embeds: [embed], components: [buttons] });
-    }
-  }
-});
-
-// ============================
-// ANTI-RAIDEO Y BIENVENIDA
-// ============================
-client.on('guildMemberAdd', async member => {
-  const now = Date.now();
-  joinCooldown.push(now);
-  const recentJoins = joinCooldown.filter(time => now - time < 15000);
-
-  if (recentJoins.length > 10) {
-    const logChannel = member.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
-    if (logChannel) logChannel.send('⚠️ **ALERTA DE RAID**: Se ha detectado un ingreso masivo de usuarios.');
-  }
-
-  const welcomeChannel = member.guild.channels.cache.find(ch => ch.name === '『👋』bienvenidos');
-  if (welcomeChannel) {
-    const embed = new EmbedBuilder()
-      .setColor('#8A2BE2')
-      .setTitle(`✨ ¡Bienvenido, ${member.user.username}! ✨`)
-      .setDescription(`🎇 ¡Disfruta tu estadía en **Power Lucky Network**!`)
-      .setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
-    welcomeChannel.send({ embeds: [embed] });
-  }
-});
-
-// ============================
-// ANTI-SPAM + SISTEMA DE NIVELES (999)
-// ============================
+// --- TICKETS, ANTI-SPAM Y NIVELES ---
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
-
   const userId = message.author.id;
-  const now = Date.now();
 
+  // Anti-Spam (Mute 5m si envía > 5 msgs en 5s)
+  const now = Date.now();
   const userData = msgCooldown.get(userId) || { count: 0, lastMsg: now };
   if (now - userData.lastMsg < 5000) userData.count++;
   else userData.count = 1;
@@ -108,155 +39,118 @@ client.on('messageCreate', async message => {
     const muteRole = message.guild.roles.cache.find(r => r.name === 'Silenciado');
     if (muteRole) {
       await message.member.roles.add(muteRole);
-      message.delete().catch(() => {});
-      
       const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
-      const antiSpamEmbed = new EmbedBuilder()
-        .setColor('#FF0000')
-        .setTitle('🛡️ Anti-Spam Detectado')
-        .setDescription(`${message.author} ha sido silenciado **5 minutos** por spam.`);
-      if (logMute) logMute.send({ embeds: [antiSpamEmbed] });
-
-      setTimeout(async () => {
-        await message.member.roles.remove(muteRole).catch(() => {});
-        const logUnmute = message.guild.channels.cache.find(ch => ch.name === '『🔉』desilenciados');
-        if (logUnmute) logUnmute.send(`🔊 ${message.author} ha sido desilenciado tras el spam.`);
-      }, 5 * 60 * 1000);
-      return;
+      if (logMute) logMute.send(`🛡️ ${message.author} silenciado 5m por **Spam**.`);
+      setTimeout(() => message.member.roles.remove(muteRole).catch(() => {}), 300000);
     }
+    return;
   }
 
+  // Niveles (Hasta 999)
   if (!levels.users[userId]) levels.users[userId] = { xp: 0, level: 1 };
   if (levels.users[userId].level < 999) {
-    levels.users[userId].xp += Math.floor(Math.random() * 15) + 15;
-    const xpNeeded = levels.users[userId].level * 150;
-
-    if (levels.users[userId].xp >= xpNeeded) {
+    levels.users[userId].xp += Math.floor(Math.random() * 10) + 15;
+    if (levels.users[userId].xp >= (levels.users[userId].level * 150)) {
       levels.users[userId].level++;
       levels.users[userId].xp = 0;
       const lvCh = message.guild.channels.cache.find(c => c.name === '『🆙』niveles');
       if (lvCh) {
-        const levelEmbed = new EmbedBuilder()
+        const embed = new EmbedBuilder()
           .setColor('#FFD700')
-          .setTitle('🌟 ¡LEVEL UP! 🌟')
-          .setDescription(`¡${message.author} ha subido al **Nivel ${levels.users[userId].level}**!`)
+          .setTitle('🌟 ¡NUEVO NIVEL! 🌟')
+          .setDescription(`¡Felicidades ${message.author}! Has subido al **Nivel ${levels.users[userId].level}**`)
           .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
           .setImage(message.author.displayAvatarURL({ size: 1024 }));
-        lvCh.send({ embeds: [levelEmbed] });
+        lvCh.send({ embeds: [embed] });
       }
     }
     saveLevels();
   }
-});
 
-// ============================
-// MODERACIÓN AVANZADA (!mute)
-// ============================
-client.on('messageCreate', async message => {
-  if (!message.guild || message.author.bot) return;
-  const args = message.content.trim().split(/ +/g);
-  const command = args[0].toLowerCase();
-
-  if (command === '!mute') {
+  // COMANDO MUTE MEJORADO
+  if (message.content.startsWith('!mute')) {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+    const args = message.content.split(' ');
     const target = message.mentions.members.first();
-    const timeArg = args.find(arg => arg.match(/^\d+[smMa]$/));
-    const reason = args.slice(1).filter(a => a !== timeArg && !a.includes(target?.id)).join(' ') || 'No especificada';
+    const timeStr = args[2]; 
+    const reason = args.slice(3).join(' ') || 'No respetó las normas';
 
-    if (!target || !timeArg) return message.reply('Usa: !mute @usuario 10s Razón');
+    if (!target || !timeStr) return message.reply('❌ Usa: `!mute @usuario 10s Razón`');
 
-    const unit = timeArg.slice(-1);
-    const value = parseInt(timeArg);
+    const value = parseInt(timeStr);
+    const unit = timeStr.slice(-1);
     let ms = 0;
     if (unit === 's') ms = value * 1000;
     else if (unit === 'm') ms = value * 60000;
     else if (unit === 'M') ms = value * 2592000000;
-    else if (unit === 'a') ms = value * 31536000000;
-
+    
     const muteRole = message.guild.roles.cache.find(r => r.name === 'Silenciado');
     await target.roles.add(muteRole);
 
-    const endTime = `<t:${Math.floor((Date.now() + ms) / 1000)}:f>`;
     const logMute = message.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
-    
-    const muteEmbed = new EmbedBuilder()
+    const embed = new EmbedBuilder()
       .setColor('#FF0000')
-      .setTitle('🚫 Sanción: Power Lucky')
+      .setTitle('🚫 Usuario Sancionado')
       .addFields(
         { name: '👤 Usuario', value: `${target}`, inline: true },
-        { name: '⏳ Tiempo', value: timeArg, inline: true },
-        { name: '📄 Razón', value: reason },
-        { name: '⏰ Termina', value: endTime }
+        { name: '⏳ Duración', value: timeStr, inline: true },
+        { name: '📄 Razón', value: reason }
       );
-    if (logMute) logMute.send({ embeds: [muteEmbed] });
-
-    target.send(`⚠️ Has sido sancionado en **Power Lucky**. Razón: ${reason}. **Aprende a respetar las normas.**`).catch(() => {});
+    
+    logMute?.send({ embeds: [embed] });
+    target.send(`⚠️ Sancionado en Power Lucky por: ${reason}. **Aprende a respetar las normas.**`).catch(() => {});
 
     setTimeout(async () => {
       await target.roles.remove(muteRole).catch(() => {});
       const logUnmute = message.guild.channels.cache.find(ch => ch.name === '『🔉』desilenciados');
-      if (logUnmute) logUnmute.send(`🔊 El usuario ${target} ha sido desilenciado.`);
+      logUnmute?.send(`🔊 ${target} ha sido desilenciado.`);
     }, ms);
   }
 });
 
-// ============================
-// TICKETS E INTERACCIONES
-// ============================
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isButton()) return;
+// --- INTERACCIONES DE TICKETS ---
+client.on('interactionCreate', async i => {
+  if (!i.isButton()) return;
 
-  // 1. CERRAR TICKET (Con retraso de 5 segundos)
-  if (interaction.customId === 'ticket_close') {
-    await interaction.reply({ content: '🔒 El ticket se cerrará en **5 segundos**...' });
-    setTimeout(() => {
-      interaction.channel.delete().catch(() => {});
-    }, 5000);
-    return;
-  }
-
-  // 2. RECLAMAR TICKET
-  if (interaction.customId === 'ticket_reclamar') {
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.reply({ content: '❌ Solo el Staff puede reclamar este ticket.', ephemeral: true });
-    }
-    const reclamarEmbed = new EmbedBuilder()
-        .setColor('#57F287')
-        .setDescription(`🎟️ El ticket ha sido reclamado por **${interaction.user.tag}**.`);
-    return interaction.reply({ embeds: [reclamarEmbed] });
-  }
-
-  // 3. CREACIÓN DE TICKET (Botones del panel principal)
-  if (interaction.customId.startsWith('ticket_')) {
-    const category = interaction.customId.split('_')[1];
-
-    const channel = await interaction.guild.channels.create({
-      name: `ticket-${interaction.user.username}`,
+  // CREAR TICKET
+  if (i.customId.startsWith('ticket_')) {
+    const cat = i.customId.split('_')[1];
+    const ch = await i.guild.channels.create({
+      name: `ticket-${i.user.username}`,
       type: ChannelType.GuildText,
       permissionOverwrites: [
-        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-        { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
       ]
     });
 
-    const embed = new EmbedBuilder()
-        .setColor('#00BFFF')
-        .setTitle(`🎫 TICKET DE ${category.toUpperCase()}`)
-        .setDescription(`Hola ${interaction.user}, bienvenido a soporte. Un moderador te atenderá en breve.`)
-        .addFields({ name: 'Categoría', value: category, inline: true });
-
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_reclamar').setLabel('🎟️ Reclamar').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('ticket_close').setLabel('🔒 Cerrar').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('claim_tk').setLabel('Reclamar').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('close_tk').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger)
     );
-    
-    await channel.send({ embeds: [embed], components: [row] });
-    interaction.reply({ content: `✅ Ticket creado correctamente: ${channel}`, ephemeral: true });
+
+    await ch.send({ 
+      content: `📦 **Ticket de ${cat.toUpperCase()}**\nHola ${i.user}, el Staff te atenderá pronto.`,
+      components: [row] 
+    });
+    i.reply({ content: `✅ Canal creado: ${ch}`, ephemeral: true });
+  }
+
+  // RECLAMAR
+  if (i.customId === 'claim_tk') {
+    if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return i.reply({ content: 'Solo Staff', ephemeral: true });
+    i.reply({ content: `🎟️ Ticket reclamado por ${i.user}` });
+  }
+
+  // CERRAR CON 5 SEGUNDOS
+  if (i.customId === 'close_tk') {
+    await i.reply('🔒 Cerrando en **5 segundos**...');
+    setTimeout(() => i.channel.delete().catch(() => {}), 5000);
   }
 });
 
+client.once('ready', () => console.log('Power Lucky Online'));
 const app = express();
-app.get('/', (req, res) => res.send('Power Lucky Bot Online'));
-app.listen(process.env.PORT || 10000);
+app.get('/', (r, s) => s.send('OK'));
+app.listen(10000);
 client.login(process.env.TOKEN);
