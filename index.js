@@ -134,6 +134,35 @@ client.on('messageCreate', async message => {
     }
 });
 
+// --- COMANDO PARA ENVIAR EL PANEL DE TICKETS (NUEVO) ---
+client.on('messageCreate', async message => {
+    if (message.content === '!setup-tickets') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+
+        const embed = new EmbedBuilder()
+            .setColor('#0099FF')
+            .setDescription(
+                '⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n' +
+                '⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n' +
+                '‼️ **Otros:** Diferentes categorías\n' +
+                '🛒 **Compras:** Dudas sobre artículos o servicios\n\n' +
+                '💠 *no abrir ticket innecesariamente*\n' +
+                '💠'
+            )
+            .setImage('https://i.imgur.com/eBf72X4.png') // Tu imagen de Power Lucky
+            .setFooter({ text: 'Power Lucky Support | Ticket' });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('ticket_support').setLabel('Support').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_reports').setLabel('Reports').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_others').setLabel('Others').setEmoji('‼️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_purchase').setLabel('Purchase').setEmoji('🛒').setStyle(ButtonStyle.Success)
+        );
+
+        message.channel.send({ embeds: [embed], components: [row] });
+    }
+});
+
 // --- SISTEMA DE TICKETS CORREGIDO ---
 client.on('interactionCreate', async i => {
     if (!i.isButton()) return;
