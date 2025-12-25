@@ -171,9 +171,7 @@ client.on('interactionCreate', async i => {
 client.once('ready', async () => {
     console.log('✅ Power Lucky Online');
 
-    // Esperar 3 segundos para asegurar que los canales carguen bien
     setTimeout(async () => {
-        // Busca el canal que contenga "tickets" en su nombre
         const ticketChannel = client.channels.cache.find(ch => ch.name.includes('tickets'));
 
         if (ticketChannel) {
@@ -187,7 +185,8 @@ client.once('ready', async () => {
                     '💠 *no abrir ticket innecesariamente*\n' +
                     '💠'
                 )
-                .setImage('https://i.imgur.com/eBf72X4.png')
+                // HE USADO EL LINK DIRECTO DE TU IMAGEN PARA QUE SE VEA SIEMPRE
+                .setImage('https://i.imgur.com/8N0nI9c.png') 
                 .setFooter({ text: 'Power Lucky Support | Ticket' });
 
             const row = new ActionRowBuilder().addComponents(
@@ -197,15 +196,12 @@ client.once('ready', async () => {
                 new ButtonBuilder().setCustomId('ticket_purchase').setLabel('Purchase').setEmoji('🛒').setStyle(ButtonStyle.Success)
             );
 
-            // Intentar enviar el mensaje
             try {
                 await ticketChannel.send({ embeds: [embed], components: [row] });
                 console.log(`🎫 Panel enviado a #${ticketChannel.name}`);
             } catch (error) {
-                console.log(`❌ Error al enviar mensaje: Revisa si el bot tiene permisos en #${ticketChannel.name}`);
+                console.log(`❌ Error: ${error.message}`);
             }
-        } else {
-            console.log('❌ No encontré ningún canal con la palabra "tickets" en el nombre.');
         }
     }, 3000);
 });
