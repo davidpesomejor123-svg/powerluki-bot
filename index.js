@@ -340,11 +340,15 @@ client.on('interactionCreate', async i => {
 });
 
 /* ───────── WEB SERVER ───────── */
-const app = express();
-app.get('/', (_, res) => res.send('Power Luki Network Bot Online'));
-app.listen(process.env.PORT || 10000, '0.0.0.0', () => {
-  console.log('🌐 Web server activo');
-});
+const port = process.env.PORT;
+if (!port) {
+  console.error('⚠️ No se detectó el puerto de Render. Asegúrate de configurar el servicio correctamente.');
+  process.exit(1);
+}
 
+app.listen(port, '0.0.0.0', () => {
+  console.log(`🌐 Web server activo en puerto ${port}`);
+});
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN);
+
