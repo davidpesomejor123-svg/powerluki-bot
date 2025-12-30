@@ -135,6 +135,7 @@ client.on('guildMemberAdd', async member => {
       `📊 Invitaciones totales: **${totalInv}**`
     )
     .setThumbnail(member.user.displayAvatarURL())
+    .setImage('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg') // Banner bienvenida
     .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' })
     .setTimestamp();
 
@@ -230,7 +231,6 @@ await rest.put(
 
 /* ───────── INTERACTIONS (SLASH + TICKETS) ───────── */
 client.on('interactionCreate', async i => {
-  // SLASH COMMANDS
   if (i.isChatInputCommand()) {
     if (i.commandName === 'mute') {
       if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
@@ -258,6 +258,7 @@ client.on('interactionCreate', async i => {
             .setColor('#0099FF')
             .setTitle('📢 ANUNCIO OFICIAL')
             .setDescription(i.options.getString('mensaje'))
+            .setImage('https://i.postimg.cc/hGM42zmj/1766642331426.jpg') // Banner anuncios
             .setFooter({ text: 'Power Luki Network Bot' })
             .setTimestamp()
         ]
@@ -272,6 +273,7 @@ client.on('interactionCreate', async i => {
             .setColor('#0099FF')
             .setTitle('🎫 POWER LUKI NETWORK | SOPORTE')
             .setDescription('Pulsa el botón para abrir un ticket. El Staff responderá pronto.')
+            .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png') // Banner panel
             .setFooter({ text: 'Power Luki Network Bot' })
         ],
         components: [
@@ -288,11 +290,10 @@ client.on('interactionCreate', async i => {
     }
   }
 
-  // TICKETS
   if (i.isButton() && i.customId === 'ticket_open') {
-    if (i.guild.channels.cache.some(c => c.name === `🎫-${i.user.id}`)) {
+    if (i.guild.channels.cache.some(c => c.name === `🎫-${i.user.id}`))
       return i.reply({ content: '❌ Ya tienes un ticket abierto', ephemeral: true });
-    }
+
     const ch = await i.guild.channels.create({
       name: `🎫-${i.user.id}`,
       type: ChannelType.GuildText,
@@ -301,6 +302,7 @@ client.on('interactionCreate', async i => {
         { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
       ]
     });
+
     await ch.send({
       content: `${i.user}`,
       embeds: [
@@ -308,6 +310,7 @@ client.on('interactionCreate', async i => {
           .setColor('#3498DB')
           .setTitle('🎫 TICKET | POWER LUKI NETWORK')
           .setDescription('📝 Indica usuario, motivo y detalles.\n⏳ El Staff responderá pronto.')
+          .setImage('https://i.postimg.cc/kM8FLgdV/Whats-App-Image-2025-12-30-at-4-31-26-PM.jpg') // Banner ticket individual
           .setFooter({ text: 'Power Luki Network Bot' })
       ],
       components: [
@@ -317,6 +320,7 @@ client.on('interactionCreate', async i => {
         )
       ]
     });
+
     i.reply({ content: `Ticket creado: ${ch}`, ephemeral: true });
   }
 
@@ -344,4 +348,3 @@ app.listen(process.env.PORT || 10000, '0.0.0.0', () => {
 
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN);
-
