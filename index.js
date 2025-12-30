@@ -114,14 +114,13 @@ client.on('messageCreate', async message => {
     }
 });
 
-// --- COMANDOS DE ANUNCIOS (EDITADO) ---
+// --- COMANDOS DE ANUNCIOS ---
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.content.startsWith('!')) return;
 
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // Roles permitidos
     const rolesStaff = ["Staff", "Admin", "Co-Owner", "Manager", "Mod"];
     const tienePermiso = message.member.roles.cache.some(r => rolesStaff.includes(r.name)) || message.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
@@ -131,10 +130,8 @@ client.on('messageCreate', async message => {
         const texto = args.join(" ");
         if (!texto) return message.reply("Escribe el mensaje del anuncio.");
 
-        // Detectar imágenes subidas desde el escritorio
         const archivosAdjuntos = message.attachments.map(a => a.url);
         
-        // Determinar canal y configuración según comando
         let nombreCanal = command === 'anuncio' ? 'anuncios' : 'nuevo';
         let color = command === 'anuncio' ? '#0099FF' : '#FFD700';
         let titulo = command === 'anuncio' ? '📢 ANUNCIO OFICIAL' : '🎊 ¡LO NUEVO!';
@@ -145,12 +142,10 @@ client.on('messageCreate', async message => {
         if (!canal) return message.reply(`No encontré el canal de ${nombreCanal}.`);
 
         try {
-            // 1. Enviar PRIMERO las imágenes subidas (si hay)
             if (archivosAdjuntos.length > 0) {
                 await canal.send({ content: `**Fotos adjuntas de ${message.author.username}:**`, files: archivosAdjuntos });
             }
 
-            // 2. Enviar DESPUÉS el Embed con la URL fija
             const embed = new EmbedBuilder()
                 .setColor(color)
                 .setTitle(titulo)
@@ -169,33 +164,72 @@ client.on('messageCreate', async message => {
     }
 });
 
-// --- SISTEMA DE TICKETS (Interacciones) ---
+// --- SISTEMA DE TICKETS (EDITADO PARA ESTILO NAUTICMC Y PERMISOS STAFF) ---
 client.on('interactionCreate', async i => {
     if (!i.isButton()) return;
+
     if (i.customId.startsWith('ticket_')) {
         const cat = i.customId.split('_')[1];
-        const ch = await i.guild.channels.create({
-            name: `ticket-${i.user.username}`,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-                { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-            ]
+        
+        // Buscar roles de Staff para darles permisos
+        const rolesStaffNames = ["Staff", "Manager", "Mod", "Admin", "Co-Owner"];
+        const staffRoles = i.guild.roles.cache.filter(role => rolesStaffNames.includes(role.name));
+
+        const overwrites = [
+            { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+            { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles] }
+        ];
+
+        // Agregar permisos automáticos a todos los roles de Staff encontrados
+        staffRoles.forEach(role => {
+            overwrites.push({
+                id: role.id,
+                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels]
+            });
         });
+
+        const ch = await i.guild.channels.create({
+            name: `🎫-${i.user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: overwrites
+        });
+
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('claim_tk').setLabel('🎟️ Reclamar').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('close_tk').setLabel('🔒 Cerrar').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('close_tk').setLabel('Cerrar Ticket').setEmoji('⚠️').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('claim_tk').setLabel('Reclamar').setEmoji('🏷️').setStyle(ButtonStyle.Primary)
         );
-        const embed = new EmbedBuilder().setColor('#00BFFF').setTitle(`🎫 Ticket: ${cat.toUpperCase()}`).setDescription(`Hola ${i.user}, el Staff te atenderá.`);
-        await ch.send({ embeds: [embed], components: [row] });
-        i.reply({ content: `✅ Ticket abierto: ${ch}`, ephemeral: true });
+
+        // EMBED ESTILO NAUTICMC / POWER LUKI
+        const embed = new EmbedBuilder()
+            .setColor('#3498DB')
+            .setTitle('SOPORTE DISCORD')
+            .setDescription(
+                `¡Hola <@${i.user.id}>! Bienvenido al soporte de **Power Luki**\n\n` +
+                `Nuestro staff le responderá en un plazo de 12 a 24 horas aproximadamente. **Por favor, sea paciente.**\n` +
+                `──────────────────────────────────\n` +
+                `**¿Cuál es tu nick de usuario?:**\n` +
+                `*(Escribe tu nombre aquí)*\n\n` +
+                `**Describe tu problema:**\n` +
+                `*(Explica detalladamente tu consulta)*\n` +
+                `──────────────────────────────────\n` +
+                `• ¡Gracias por confiar en nosotros! •`
+            )
+            .setImage('https://i.postimg.cc/kM8FLgdV/Whats-App-Image-2025-12-30-at-4-31-26-PM.jpg');
+
+        await ch.send({ content: `<@${i.user.id}> | @here`, embeds: [embed], components: [row] });
+        i.reply({ content: `✅ Ticket abierto en ${ch}`, ephemeral: true });
     }
+
     if (i.customId === 'claim_tk') {
-        if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return i.reply({ content: '❌ Solo Staff.', ephemeral: true });
-        i.reply({ content: `🎟️ Reclamado por **${i.user.tag}**` });
+        const rolesStaff = ["Staff", "Admin", "Co-Owner", "Manager", "Mod"];
+        if (!i.member.roles.cache.some(r => rolesStaff.includes(r.name))) {
+            return i.reply({ content: '❌ Solo el Staff puede reclamar este ticket.', ephemeral: true });
+        }
+        i.reply({ content: `👋 El Staff **${i.user.username}** ha tomado tu caso y te ayudará en breve.` });
     }
+
     if (i.customId === 'close_tk') {
-        await i.reply('🔒 Cerrando en 5s...');
+        await i.reply('🔒 El ticket se cerrará en 5 segundos...');
         setTimeout(() => i.channel.delete().catch(() => {}), 5000);
     }
 });
@@ -212,9 +246,10 @@ client.once('ready', async () => {
         if (!botPanel) {
             const embed = new EmbedBuilder()
                 .setColor('#0099FF')
-                .setDescription('⚙️ **Soporte:** Ayuda general\n⚠️ **Reportes:** Bugs\n‼️ **Otros:** Categorías\n🛒 **Compras:** Dudas')
+                .setTitle('🎫 PANEL DE SOPORTE')
+                .setDescription('Selecciona una categoría para abrir un ticket de atención.\n\n⚙️ **Soporte:** Ayuda general\n⚠️ **Reportes:** Jugadores o Bugs\n‼️ **Otros:** Dudas varias\n🛒 **Compras:** Problemas con la tienda')
                 .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png')
-                .setFooter({ text: 'Power Lucky Support' });
+                .setFooter({ text: 'Power Lucky Network | Sistema de Soporte' });
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('ticket_support').setLabel('Soporte').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
@@ -225,8 +260,6 @@ client.once('ready', async () => {
 
             await ticketChannel.send({ embeds: [embed], components: [row] });
             console.log("🎫 Nuevo panel de tickets enviado.");
-        } else {
-            console.log("🎫 El panel de tickets ya existe. No se envió duplicado.");
         }
     }
 });
