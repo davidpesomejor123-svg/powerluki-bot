@@ -164,14 +164,11 @@ client.on('messageCreate', async message => {
     }
 });
 
-// --- SISTEMA DE TICKETS (EDITADO PARA ESTILO NAUTICMC Y PERMISOS STAFF) ---
+// --- SISTEMA DE TICKETS (ESTILO NAUTICMC Y PERMISOS STAFF) ---
 client.on('interactionCreate', async i => {
     if (!i.isButton()) return;
 
     if (i.customId.startsWith('ticket_')) {
-        const cat = i.customId.split('_')[1];
-        
-        // Buscar roles de Staff para darles permisos
         const rolesStaffNames = ["Staff", "Manager", "Mod", "Admin", "Co-Owner"];
         const staffRoles = i.guild.roles.cache.filter(role => rolesStaffNames.includes(role.name));
 
@@ -180,7 +177,6 @@ client.on('interactionCreate', async i => {
             { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles] }
         ];
 
-        // Agregar permisos automáticos a todos los roles de Staff encontrados
         staffRoles.forEach(role => {
             overwrites.push({
                 id: role.id,
@@ -199,7 +195,6 @@ client.on('interactionCreate', async i => {
             new ButtonBuilder().setCustomId('claim_tk').setLabel('Reclamar').setEmoji('🏷️').setStyle(ButtonStyle.Primary)
         );
 
-        // EMBED ESTILO NAUTICMC / POWER LUKI
         const embed = new EmbedBuilder()
             .setColor('#3498DB')
             .setTitle('SOPORTE DISCORD')
@@ -240,8 +235,8 @@ client.once('ready', async () => {
     
     const ticketChannel = client.channels.cache.find(ch => ch.name.includes('tickets'));
     if (ticketChannel) {
-        const messages = await ticketChannel.messages.fetch({ limit: 50 });
-        const botPanel = messages.find(m => m.author.id === client.user.id && m.embeds.length > 0);
+        const messages = await ticketChannel.messages.fetch({ limit: 50 }).catch(() => null);
+        const botPanel = messages?.find(m => m.author.id === client.user.id && m.embeds.length > 0);
 
         if (!botPanel) {
             const embed = new EmbedBuilder()
@@ -264,7 +259,14 @@ client.once('ready', async () => {
     }
 });
 
+// --- SERVIDOR WEB (FIX PARA RENDER Y UPTIME) ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot Online'));
-app.listen(10000);
-client.login(process.env.TOKEN);
+app.get('/', (req, res) => res.send('Power Lucky Bot Online ✅'));
+
+const port = process.env.PORT || 10000;
+app.listen(port, '0.0.0.0', () => {
+  console.log(`🚀 Monitoreo web activo en el puerto ${port}`);
+});
+
+// LOGIN FINAL
+client.login(process.env.TOKEN).catch(err => console.error("Error Login:", err));
