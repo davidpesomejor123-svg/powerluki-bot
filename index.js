@@ -34,7 +34,6 @@ client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
   const userId = message.author.id;
 
-  // Anti-Spam (Mute automático 5m)
   const now = Date.now();
   const userData = msgCooldown.get(userId) || { count: 0, lastMsg: now };
   if (now - userData.lastMsg < 5000) userData.count++;
@@ -51,7 +50,6 @@ client.on('messageCreate', async message => {
     } catch (e) { console.log("Error en auto-mute spam"); }
   }
 
-  // Niveles hasta 999
   if (!levels.users[userId]) levels.users[userId] = { xp: 0, level: 1 };
   if (levels.users[userId].level < 999) {
     levels.users[userId].xp += Math.floor(Math.random() * 10) + 15;
@@ -116,30 +114,57 @@ client.on('messageCreate', async message => {
     }
 });
 
-// --- COMANDOS DE ANUNCIOS CON SPOILER ---
+// --- COMANDOS DE ANUNCIOS (EDITADO) ---
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.content.startsWith('!')) return;
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 
-    if (message.content.startsWith('!anuncio')) {
-        const texto = message.content.slice('!anuncio'.length).trim();
-        if (!texto) return message.reply("Escribe el mensaje.");
-        const canal = message.guild.channels.cache.find(ch => ch.name.includes('anuncios'));
-        const embed = new EmbedBuilder().setColor('#0099FF').setTitle('📢 ANUNCIO OFICIAL').setDescription(texto).setImage('https://i.postimg.cc/hGM42zmj/1766642331426.jpg').setFooter({ text: 'Power Lucky Network' }).setTimestamp();
-        if (canal) {
-            await canal.send({ content: '|| @everyone ||', embeds: [embed] });
-            message.reply("✅ Enviado.");
-        }
-    }
+    const args = message.content.slice(1).trim().split(/ +/);
+    const command = args.shift().toLowerCase();
 
-    if (message.content.startsWith('!nuevo')) {
-        const texto = message.content.slice('!nuevo'.length).trim();
-        if (!texto) return message.reply("Escribe la novedad.");
-        const canal = message.guild.channels.cache.find(ch => ch.name.includes('nuevo'));
-        const embed = new EmbedBuilder().setColor('#FFD700').setTitle('🎊 ¡LO NUEVO!').setDescription(texto).setImage('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg').setFooter({ text: 'Power Lucky Updates' }).setTimestamp();
-        if (canal) {
+    // Roles permitidos
+    const rolesStaff = ["Staff", "Admin", "Co-Owner", "Manager", "Mod"];
+    const tienePermiso = message.member.roles.cache.some(r => rolesStaff.includes(r.name)) || message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+    if (command === 'anuncio' || command === 'nuevo') {
+        if (!tienePermiso) return message.reply("❌ No tienes permiso (Staff/Admin) para usar esto.");
+
+        const texto = args.join(" ");
+        if (!texto) return message.reply("Escribe el mensaje del anuncio.");
+
+        // Detectar imágenes subidas desde el escritorio
+        const archivosAdjuntos = message.attachments.map(a => a.url);
+        
+        // Determinar canal y configuración según comando
+        let nombreCanal = command === 'anuncio' ? 'anuncios' : 'nuevo';
+        let color = command === 'anuncio' ? '#0099FF' : '#FFD700';
+        let titulo = command === 'anuncio' ? '📢 ANUNCIO OFICIAL' : '🎊 ¡LO NUEVO!';
+        let imagenUrl = command === 'anuncio' ? 'https://i.postimg.cc/hGM42zmj/1766642331426.jpg' : 'https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg';
+        let footer = command === 'anuncio' ? 'Power Lucky Network' : 'Power Lucky Updates';
+
+        const canal = message.guild.channels.cache.find(ch => ch.name.includes(nombreCanal));
+        if (!canal) return message.reply(`No encontré el canal de ${nombreCanal}.`);
+
+        try {
+            // 1. Enviar PRIMERO las imágenes subidas (si hay)
+            if (archivosAdjuntos.length > 0) {
+                await canal.send({ content: `**Fotos adjuntas de ${message.author.username}:**`, files: archivosAdjuntos });
+            }
+
+            // 2. Enviar DESPUÉS el Embed con la URL fija
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(titulo)
+                .setDescription(texto)
+                .setImage(imagenUrl)
+                .setFooter({ text: footer })
+                .setTimestamp();
+
             await canal.send({ content: '|| @everyone ||', embeds: [embed] });
-            message.reply("✅ Enviado.");
+            message.reply("✅ Anuncio enviado correctamente.");
+            message.delete().catch(() => {});
+        } catch (e) {
+            console.error(e);
+            message.reply("Hubo un error al enviar el anuncio.");
         }
     }
 });
@@ -175,13 +200,12 @@ client.on('interactionCreate', async i => {
     }
 });
 
-// --- READY: EVITAR DUPLICADO DE TICKETS ---
+// --- READY ---
 client.once('ready', async () => {
     console.log('✅ Power Lucky Online');
     
     const ticketChannel = client.channels.cache.find(ch => ch.name.includes('tickets'));
     if (ticketChannel) {
-        // Buscamos si ya hay un mensaje del bot en el canal de tickets
         const messages = await ticketChannel.messages.fetch({ limit: 50 });
         const botPanel = messages.find(m => m.author.id === client.user.id && m.embeds.length > 0);
 
