@@ -55,7 +55,6 @@ client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) { console.error(e); }
 
-  // --- PANEL PRINCIPAL DE TICKETS POWER LUKI ---
   const canal = client.channels.cache.find(c => c.name === TICKET_CHANNEL_NAME);
   if (canal) {
     const msgs = await canal.messages.fetch({ limit: 10 }).catch(() => null);
@@ -73,29 +72,13 @@ client.once('ready', async () => {
         .setFooter({ text: 'Power Luki Support | Ticket', iconURL: client.user.displayAvatarURL() });
 
       const fila1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('crear_ticket_soporte')
-          .setLabel('Support')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('⚙️'),
-        new ButtonBuilder()
-          .setCustomId('crear_ticket_reportes')
-          .setLabel('Reports')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('⚠️')
+        new ButtonBuilder().setCustomId('crear_ticket_soporte').setLabel('Support').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+        new ButtonBuilder().setCustomId('crear_ticket_reportes').setLabel('Reports').setStyle(ButtonStyle.Secondary).setEmoji('⚠️')
       );
 
       const fila2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('crear_ticket_otros')
-          .setLabel('Others')
-          .setStyle(ButtonStyle.Danger)
-          .setEmoji('‼️'),
-        new ButtonBuilder()
-          .setCustomId('crear_ticket_compras')
-          .setLabel('Purchase')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('🛒')
+        new ButtonBuilder().setCustomId('crear_ticket_otros').setLabel('Others').setStyle(ButtonStyle.Danger).setEmoji('‼️'),
+        new ButtonBuilder().setCustomId('crear_ticket_compras').setLabel('Purchase').setStyle(ButtonStyle.Success).setEmoji('🛒')
       );
 
       await canal.send({ embeds: [embedPowerLuki], components: [fila1, fila2] });
@@ -108,28 +91,29 @@ client.once('ready', async () => {
   });
 });
 
-/* ───────── INTERACCIONES (MODALES Y BOTONES) ───────── */
+/* ───────── INTERACCIONES ───────── */
 client.on('interactionCreate', async i => {
   try {
-    // --- BOTONES DEL PANEL PRINCIPAL ---
     if (i.isButton() && i.customId.startsWith('crear_ticket_')) {
       const tipo = i.customId.split('_')[2];
-      let titulo = '', descripcion = '';
+      let titulo = '', labelPregunta = '';
+
+      // Etiquetas acortadas para evitar el error de 45 caracteres de Discord
       switch(tipo) {
-        case 'soporte': titulo = 'Soporte - Ayuda general'; descripcion = 'Por favor describe tu problema o duda en el servidor.'; break;
-        case 'reportes': titulo = 'Reporte - Bugs o errores'; descripcion = 'Indica detalladamente el error o bug que encontraste.'; break;
-        case 'otros': titulo = 'Otros - Diferentes categorías'; descripcion = 'Especifica la categoría de tu ticket.'; break;
-        case 'compras': titulo = 'Compras - Dudas sobre artículos'; descripcion = 'Escribe tu duda o problema con la compra.'; break;
+        case 'soporte': titulo = 'Soporte General'; labelPregunta = 'Describe tu duda o problema:'; break;
+        case 'reportes': titulo = 'Reporte de Fallos'; labelPregunta = 'Detalla el error o bug:'; break;
+        case 'otros': titulo = 'Otras Consultas'; labelPregunta = 'Especifica el motivo del ticket:'; break;
+        case 'compras': titulo = 'Asistencia de Compras'; labelPregunta = 'Describe tu duda con la compra:'; break;
       }
 
       const modal = new ModalBuilder().setCustomId(`modal_tk_${tipo}`).setTitle(titulo);
       const nickInput = new TextInputBuilder().setCustomId('nick').setLabel('Tu nick en el juego').setStyle(TextInputStyle.Short).setRequired(true);
-      const descInput = new TextInputBuilder().setCustomId('desc').setLabel(descripcion).setStyle(TextInputStyle.Paragraph).setRequired(true);
+      const descInput = new TextInputBuilder().setCustomId('desc').setLabel(labelPregunta).setStyle(TextInputStyle.Paragraph).setRequired(true);
+      
       modal.addComponents(new ActionRowBuilder().addComponents(nickInput), new ActionRowBuilder().addComponents(descInput));
       return i.showModal(modal);
     }
 
-    // --- MODALES ---
     if (i.type === InteractionType.ModalSubmit && i.customId.startsWith('modal_tk_')) {
       const tipo = i.customId.split('_')[2];
       const nick = i.fields.getTextInputValue('nick');
@@ -163,10 +147,9 @@ client.on('interactionCreate', async i => {
       return i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
     }
 
-    // --- BOTONES DENTRO DEL TICKET ---
     if (i.isButton() && ['reclamar', 'cerrar'].includes(i.customId)) {
       const esStaff = ROLES_TICKETS.some(r => i.member.roles.cache.some(role => role.name === r));
-      if (!esStaff) return i.reply({ content: '❌ Solo staff puede usar este botón.', ephemeral: true });
+      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
 
       if (i.customId === 'reclamar') {
         await i.channel.setName(`✅-${i.user.username}`);
@@ -180,20 +163,16 @@ client.on('interactionCreate', async i => {
     }
 
   } catch (error) {
-    console.error('Error en interactionCreate:', error);
-    if (i.deferred || i.replied) return;
-    i.reply({ content: '❌ Ocurrió un error al procesar la interacción.', ephemeral: true });
+    console.error('Error:', error);
   }
 });
 
-/* ───────── MENSAJES (!ANUNCIO, !NUEVO) ───────── */
+/* ───────── COMANDOS Y BIENVENIDAS ───────── */
+// (Se mantiene igual al anterior para !anuncio, !nuevo y bienvenida)
 client.on('messageCreate', async msg => {
-  if (msg.author.bot || !msg.guild) return;
-  if (!msg.content.startsWith(PREFIJO)) return;
-
+  if (msg.author.bot || !msg.guild || !msg.content.startsWith(PREFIJO)) return;
   const args = msg.content.slice(PREFIJO.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
   if (!['anuncio', 'nuevo'].includes(command)) return;
   if (!msg.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 
@@ -212,19 +191,15 @@ client.on('messageCreate', async msg => {
     .setImage(imgs[0] || imgFinal);
 
   await canal.send({ content: isAnuncio ? '@everyone' : '', embeds: [embed] });
-
   for (let j = 1; j < imgs.length; j++) {
     await canal.send({ embeds: [new EmbedBuilder().setImage(imgs[j]).setColor(embed.data.color)] });
   }
-
   if (imgs.length === 0 || imgs[0] !== imgFinal) {
     await canal.send({ embeds: [new EmbedBuilder().setImage(imgFinal).setColor(embed.data.color)] });
   }
-
   msg.delete().catch(() => {});
 });
 
-/* ───────── BIENVENIDAS ───────── */
 client.on('guildMemberAdd', async m => {
   const ch = m.guild.channels.cache.find(c => c.name.includes('bienvenidos'));
   if (!ch) return;
@@ -233,18 +208,17 @@ client.on('guildMemberAdd', async m => {
   let inviter = 'Desconocido', count = 0;
   if (invs && old) {
     const invite = invs.find(i => i.uses > (old.get(i.code) || 0));
-    if (invite) { inviter = invite.inviter.username; invitesDB[invite.inviter.id] = (invitesDB[invite.inviter.id] || 0) + 1; count = invitesDB[invite.inviter.id]; }
+    if (invite) { 
+      inviter = invite.inviter.username; 
+      invitesDB[invite.inviter.id] = (invitesDB[invite.inviter.id] || 0) + 1; 
+      count = invitesDB[invite.inviter.id]; 
+    }
     guildInvites.set(m.guild.id, new Map(invs.map(i => [i.code, i.uses])));
   }
-  const embed = new EmbedBuilder()
-    .setColor('#00E5FF')
-    .setTitle('✨ BIENVENIDO')
-    .setDescription(`👤 **${m.user.username}**\n🔗 Invitado por: **${inviter}** (${count} invs)`)
-    .setImage(BIENVENIDA_IMAGEN);
+  const embed = new EmbedBuilder().setColor('#00E5FF').setTitle('✨ BIENVENIDO').setDescription(`👤 **${m.user.username}**\n🔗 Invitado por: **${inviter}** (${count} invs)`).setImage(BIENVENIDA_IMAGEN);
   ch.send({ embeds: [embed] });
 });
 
-/* ───────── WEB SERVER Y LOGIN ───────── */
 const app = express();
 app.get('/', (r, s) => s.send('Power Luki ✅'));
 app.listen(process.env.PORT || 10000, () => client.login(process.env.TOKEN));
