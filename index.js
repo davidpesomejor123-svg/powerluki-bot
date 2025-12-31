@@ -38,23 +38,11 @@ setInterval(() => {
   fs.writeFileSync('./invites.json', JSON.stringify(invitesDB, null, 2));
 }, 30000);
 
-/* ───────── COMANDOS SLASH ───────── */
-const commands = [
-  new SlashCommandBuilder()
-    .setName('mute')
-    .setDescription('Silenciar a un usuario')
-    .addUserOption(opt => opt.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
-    .addStringOption(opt => opt.setName('tiempo').setDescription('Ej: 10m, 1h').setRequired(true))
-    .addStringOption(opt => opt.setName('razon').setDescription('Motivo').setRequired(true)),
-].map(cmd => cmd.toJSON());
-
 /* ───────── EVENTO READY ───────── */
 client.once('ready', async () => {
   console.log(`✅ Power Luki Network ONLINE: ${client.user.tag}`);
 
-  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) { console.error(e); }
-
+  // Panel Principal Estilo HyMagic
   const canal = client.channels.cache.find(c => c.name === TICKET_CHANNEL_NAME);
   if (canal) {
     const msgs = await canal.messages.fetch({ limit: 10 }).catch(() => null);
@@ -62,10 +50,10 @@ client.once('ready', async () => {
       const embedPowerLuki = new EmbedBuilder()
         .setColor('#0099ff')
         .setDescription(
-          `⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n` +
-          `⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n` +
+          `⚙️ **Soporte:** Ayuda general o asistencia\n` +
+          `⚠️ **Reportes:** Bugs, errores o problemas\n` +
           `‼️ **Otros:** Diferentes categorías\n` +
-          `🛒 **Compras:** Dudas sobre artículos o servicios\n\n` +
+          `🛒 **Compras:** Dudas sobre artículos\n\n` +
           `💠 *No abras ticket innecesariamente*`
         )
         .setImage(PANEL_TICKET_IMAGEN)
@@ -98,12 +86,11 @@ client.on('interactionCreate', async i => {
       const tipo = i.customId.split('_')[2];
       let titulo = '', labelPregunta = '';
 
-      // Etiquetas acortadas para evitar el error de 45 caracteres de Discord
       switch(tipo) {
-        case 'soporte': titulo = 'Soporte General'; labelPregunta = 'Describe tu duda o problema:'; break;
+        case 'soporte': titulo = 'Soporte General'; labelPregunta = '¿En qué podemos ayudarte?'; break;
         case 'reportes': titulo = 'Reporte de Fallos'; labelPregunta = 'Detalla el error o bug:'; break;
-        case 'otros': titulo = 'Otras Consultas'; labelPregunta = 'Especifica el motivo del ticket:'; break;
-        case 'compras': titulo = 'Asistencia de Compras'; labelPregunta = 'Describe tu duda con la compra:'; break;
+        case 'otros': titulo = 'Otras Consultas'; labelPregunta = 'Motivo del ticket:'; break;
+        case 'compras': titulo = 'Asistencia Compras'; labelPregunta = 'Duda sobre tu compra:'; break;
       }
 
       const modal = new ModalBuilder().setCustomId(`modal_tk_${tipo}`).setTitle(titulo);
@@ -111,13 +98,15 @@ client.on('interactionCreate', async i => {
       const descInput = new TextInputBuilder().setCustomId('desc').setLabel(labelPregunta).setStyle(TextInputStyle.Paragraph).setRequired(true);
       
       modal.addComponents(new ActionRowBuilder().addComponents(nickInput), new ActionRowBuilder().addComponents(descInput));
-      return i.showModal(modal);
+      return await i.showModal(modal); // Solución error 40060
     }
 
     if (i.type === InteractionType.ModalSubmit && i.customId.startsWith('modal_tk_')) {
       const tipo = i.customId.split('_')[2];
       const nick = i.fields.getTextInputValue('nick');
       const desc = i.fields.getTextInputValue('desc');
+
+      await i.deferReply({ ephemeral: true });
 
       const canal = await i.guild.channels.create({
         name: `ticket-${i.user.username}`,
@@ -134,45 +123,52 @@ client.on('interactionCreate', async i => {
 
       const embed = new EmbedBuilder()
         .setColor('#2F3136')
-        .setTitle(`🎫 Ticket | ${tipo.toUpperCase()}`)
-        .setDescription(`👋 Hola **${i.user.username}**! El staff responderá pronto\n────────────────────\n**Nick:** ${nick}\n**Problema:** ${desc}\n────────────────────`)
+        .setTitle('SOPORTE DISCORD') // Estilo Nautic
+        .setDescription(
+          `¡Hola ${i.user}! Bienvenido al soporte de **Power Luki Network**\n\n` +
+          `Nuestro staff le responderá en un plazo de 12 a 24 horas aproximadamente. **Por favor, sea paciente.**\n` +
+          `──────────────────────────────\n` +
+          `**Nick:** ${nick}\n` +
+          `**Problema:** ${desc}\n` +
+          `──────────────────────────────\n` +
+          `* • ¡Gracias por confiar en nosotros! • *`
+        )
         .setImage(TICKET_INTERIOR_IMAGEN);
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋'),
-        new ButtonBuilder().setCustomId('cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+        new ButtonBuilder().setCustomId('cerrar').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔺'),
+        new ButtonBuilder().setCustomId('reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('🎫')
       );
 
       await canal.send({ content: `${i.user} | @Power Luki Staff`, embeds: [embed], components: [row] });
-      return i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
+      return await i.editReply({ content: `✅ Ticket creado: ${canal}` });
     }
 
     if (i.isButton() && ['reclamar', 'cerrar'].includes(i.customId)) {
       const esStaff = ROLES_TICKETS.some(r => i.member.roles.cache.some(role => role.name === r));
-      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
+      if (!esStaff) return i.reply({ content: '❌ Solo el Staff puede usar esto.', ephemeral: true });
 
       if (i.customId === 'reclamar') {
         await i.channel.setName(`✅-${i.user.username}`);
-        return i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
+        return i.reply(`👋 El Staff **${i.user.username}** se ha hecho cargo del ticket.`);
       }
 
       if (i.customId === 'cerrar') {
-        await i.reply('🔒 Cerrando ticket...');
-        setTimeout(() => i.channel.delete().catch(() => {}), 4000);
+        await i.reply('🔒 Cerrando ticket en 5 segundos...');
+        setTimeout(() => i.channel.delete().catch(() => {}), 5000);
       }
     }
-
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error en interacción:', error);
   }
 });
 
 /* ───────── COMANDOS Y BIENVENIDAS ───────── */
-// (Se mantiene igual al anterior para !anuncio, !nuevo y bienvenida)
 client.on('messageCreate', async msg => {
   if (msg.author.bot || !msg.guild || !msg.content.startsWith(PREFIJO)) return;
   const args = msg.content.slice(PREFIJO.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
+  
   if (!['anuncio', 'nuevo'].includes(command)) return;
   if (!msg.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 
@@ -191,9 +187,6 @@ client.on('messageCreate', async msg => {
     .setImage(imgs[0] || imgFinal);
 
   await canal.send({ content: isAnuncio ? '@everyone' : '', embeds: [embed] });
-  for (let j = 1; j < imgs.length; j++) {
-    await canal.send({ embeds: [new EmbedBuilder().setImage(imgs[j]).setColor(embed.data.color)] });
-  }
   if (imgs.length === 0 || imgs[0] !== imgFinal) {
     await canal.send({ embeds: [new EmbedBuilder().setImage(imgFinal).setColor(embed.data.color)] });
   }
@@ -219,6 +212,7 @@ client.on('guildMemberAdd', async m => {
   ch.send({ embeds: [embed] });
 });
 
+/* ───────── WEB SERVER ───────── */
 const app = express();
 app.get('/', (r, s) => s.send('Power Luki ✅'));
 app.listen(process.env.PORT || 10000, () => client.login(process.env.TOKEN));
