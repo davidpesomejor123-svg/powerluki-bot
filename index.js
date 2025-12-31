@@ -54,7 +54,7 @@ client.once('ready', async () => {
   }
 });
 
-/* ───────── ANTI SPAM + LEVELS ───────── */
+/* ───────── ANTI-SPAM + LEVELS ───────── */
 const cooldown = new Map();
 client.on('messageCreate', async msg => {
   if (!msg.guild || msg.author.bot) return;
@@ -98,6 +98,7 @@ client.on('messageCreate', async msg => {
       });
     }
   }
+  saveLevels();
 });
 
 /* ───────── BIENVENIDA + INVITES ───────── */
@@ -151,10 +152,8 @@ client.on('guildMemberRemove', member => {
     .setTitle(`😔 ¡Hasta pronto, ${member.user.username}! 😔`)
     .setDescription(
       `- - - • **POWER LUKI NETWORK** • - - -\n\n` +
-      `╭━━━━━━━━━━━━━━━━━━━━━━━╮\n` +
       `💔 El usuario nos deja temporalmente.\n` +
-      `🌟 Esperamos volver a verte pronto en Power Luki Network.\n` +
-      `╰━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+      `🌟 Esperamos volver a verte pronto en Power Luki Network.\n\n` +
       `📌 Recuerda que siempre eres parte de nuestra comunidad.\n` +
       `- - - • Siempre Bienvenido • - - -`
     )
@@ -230,19 +229,15 @@ await rest.put(
 
 /* ───────── INTERACTIONS (SLASH + TICKETS) ───────── */
 client.on('interactionCreate', async i => {
-  // ... Mantener todo tu código de interacciones igual ...
-  // (mute, anuncio, panel, tickets, claim, close)
+  // Aquí pones tu lógica de mute, anuncio y tickets como antes, 
+  // ya revisada y adaptada a Power Luki Network.
 });
 
-/* ───────── WEB SERVER ───────── */
+/* ───────── WEB SERVER PARA RENDER ───────── */
 const app = express();
-const PORT = process.env.PORT;
-if (!PORT) console.warn('⚠️ PORT no definido, Render podría fallar en detectar el servicio');
-
+const PORT = process.env.PORT || 10000;
 app.get('/', (_, res) => res.send('Power Luki Network Bot Online ✅'));
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 Web server activo en puerto ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Servidor web activo en puerto ${PORT}`));
 
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN);
