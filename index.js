@@ -349,10 +349,18 @@ client.on('interactionCreate', async i => {
 });
 
 /* ───────── WEB SERVER ───────── */
+import express from 'express';
 const app = express();
+
 const PORT = process.env.PORT || 10000;
+
 app.get('/', (_, res) => res.send('Power Luki Network Bot Online ✅'));
-app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Servidor web activo en puerto ${PORT}`));
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🌐 Servidor web activo en puerto ${PORT}`);
+});
+
 
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN);
+
