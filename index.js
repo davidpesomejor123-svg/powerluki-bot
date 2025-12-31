@@ -32,8 +32,7 @@ let levels = { users: {} };
 if (fs.existsSync('./levels.json')) {
   levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
 }
-const saveLevels = () =>
-  fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
+const saveLevels = () => fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
 setInterval(saveLevels, 30000);
 
 /* ───────── INVITES ───────── */
@@ -41,8 +40,7 @@ let invites = {};
 if (fs.existsSync('./invites.json')) {
   invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
 }
-const saveInvites = () =>
-  fs.writeFileSync('./invites.json', JSON.stringify(invites, null, 2));
+const saveInvites = () => fs.writeFileSync('./invites.json', JSON.stringify(invites, null, 2));
 const guildInvites = new Map();
 
 /* ───────── READY ───────── */
@@ -67,16 +65,14 @@ client.on('messageCreate', async msg => {
   data.last = now;
   cooldown.set(msg.author.id, data);
 
-  if (
-    data.count > 5 &&
-    !msg.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)
-  ) {
+  if (data.count > 5 && !msg.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
     await msg.member.timeout(5 * 60 * 1000, 'Spam detectado');
     const logMute = msg.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
     if (logMute) logMute.send(`🛡️ ${msg.author} silenciado **5 minutos** por spam.`);
     return;
   }
 
+  // Sistema de niveles
   const id = msg.author.id;
   if (!levels.users[id]) levels.users[id] = { xp: 0, level: 1 };
   const user = levels.users[id];
@@ -93,12 +89,11 @@ client.on('messageCreate', async msg => {
             .setColor('#FFD700')
             .setTitle('🌟 NUEVO NIVEL')
             .setDescription(`${msg.author} alcanzó **Nivel ${user.level}**`)
-            .setThumbnail(msg.author.displayAvatarURL())
+            .setThumbnail(msg.author.displayAvatarURL({ dynamic: true }))
         ]
       });
     }
   }
-  saveLevels();
 });
 
 /* ───────── BIENVENIDA + INVITES ───────── */
@@ -134,7 +129,7 @@ client.on('guildMemberAdd', async member => {
       `🔗 Invitado por: **${inviterTag}**\n` +
       `📊 Invitaciones totales: **${totalInv}**`
     )
-    .setThumbnail(member.user.displayAvatarURL())
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setImage('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg')
     .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' })
     .setTimestamp();
@@ -157,7 +152,7 @@ client.on('guildMemberRemove', member => {
       `📌 Recuerda que siempre eres parte de nuestra comunidad.\n` +
       `- - - • Siempre Bienvenido • - - -`
     )
-    .setThumbnail(member.user.displayAvatarURL())
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: 'Power Luki Network • Nos vemos pronto' })
     .setTimestamp();
 
@@ -178,7 +173,7 @@ client.on('guildMemberUpdate', (oldM, newM) => {
           .setColor('#FF0000')
           .setTitle('🔇 Usuario Silenciado')
           .setDescription(`👤 Usuario: ${newM}\n⏳ Hasta: <t:${Math.floor(isMuted / 1000)}:F>`)
-          .setThumbnail(newM.user.displayAvatarURL())
+          .setThumbnail(newM.user.displayAvatarURL({ dynamic: true }))
           .setFooter({ text: 'Power Luki Network Moderación' })
           .setTimestamp()
       ]
@@ -194,7 +189,7 @@ client.on('guildMemberUpdate', (oldM, newM) => {
           .setColor('#00FF7F')
           .setTitle('🔉 Usuario Desilenciado')
           .setDescription(`👤 Usuario: ${newM}`)
-          .setThumbnail(newM.user.displayAvatarURL())
+          .setThumbnail(newM.user.displayAvatarURL({ dynamic: true }))
           .setFooter({ text: 'Power Luki Network Moderación' })
           .setTimestamp()
       ]
@@ -229,11 +224,131 @@ await rest.put(
 
 /* ───────── INTERACTIONS (SLASH + TICKETS) ───────── */
 client.on('interactionCreate', async i => {
-  // Aquí pones tu lógica de mute, anuncio y tickets como antes, 
-  // ya revisada y adaptada a Power Luki Network.
+  if (i.isChatInputCommand()) {
+    // --- MUTE ---
+    if (i.commandName === 'mute') {
+      if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
+        return i.reply({ content: '❌ Sin permiso', ephemeral: true });
+      const user = i.options.getMember('usuario');
+      const t = i.options.getString('tiempo');
+      const r = i.options.getString('razon') || 'No especificada';
+      const n = parseInt(t);
+      const u = t.slice(-1);
+      const ms = u === 'm' ? n * 60000 : u === 's' ? n * 1000 : null;
+      if (!ms) return i.reply('Formato inválido');
+      await user.timeout(ms, r);
+      i.reply(`✅ ${user} silenciado (${t})`);
+    }
+
+    // --- ANUNCIO ---
+    if (i.commandName === 'anuncio') {
+      if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return i.reply({ content: '❌ Sin permiso', ephemeral: true });
+      const ch = i.guild.channels.cache.find(c => c.name.includes('anuncios'));
+      if (!ch) return i.reply('No existe canal anuncios');
+      await ch.send({
+        content: '@everyone',
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#0099FF')
+            .setTitle('📢 ANUNCIO OFICIAL')
+            .setDescription(i.options.getString('mensaje'))
+            .setImage('https://i.postimg.cc/hGM42zmj/1766642331426.jpg')
+            .setFooter({ text: 'Power Luki Network Bot' })
+            .setTimestamp()
+        ]
+      });
+      i.reply({ content: '✅ Anuncio enviado', ephemeral: true });
+    }
+
+    // --- PANEL / TICKETS ---
+    if (i.commandName === 'panel') {
+      i.channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#0099FF')
+            .setTitle('🎫 POWER LUKI NETWORK | SOPORTE')
+            .setDescription('Pulsa el botón para abrir un ticket. El Staff responderá pronto.')
+            .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png')
+            .setFooter({ text: 'Power Luki Network Bot' })
+        ],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('ticket_open')
+              .setLabel('Abrir Ticket')
+              .setStyle(ButtonStyle.Success)
+              .setEmoji('🎫')
+          )
+        ]
+      });
+      i.reply({ content: 'Panel enviado', ephemeral: true });
+    }
+  }
+
+  // --- BOTONES TICKETS ---
+  if (i.isButton()) {
+    // Abrir Ticket
+    if (i.customId === 'ticket_open') {
+      if (i.guild.channels.cache.some(c => c.name === `🎫-${i.user.id}`))
+        return i.reply({ content: '❌ Ya tienes un ticket abierto', ephemeral: true });
+
+      const staffRolesNames = ["Staff", "Manager", "Mod", "Admin", "Co-Owner"];
+      const staffRoles = i.guild.roles.cache.filter(r => staffRolesNames.includes(r.name));
+
+      const overwrites = [
+        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+      ];
+      staffRoles.forEach(role => {
+        overwrites.push({ id: role.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] });
+      });
+
+      const ch = await i.guild.channels.create({
+        name: `🎫-${i.user.id}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: overwrites
+      });
+
+      await ch.send({
+        content: `${i.user}`,
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#3498DB')
+            .setTitle('🎫 TICKET | POWER LUKI NETWORK')
+            .setDescription('📝 Indica usuario, motivo y detalles.\n⏳ El Staff responderá pronto.')
+            .setFooter({ text: 'Power Luki Network Bot' })
+        ],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('claim').setLabel('Reclamar').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('close').setLabel('Cerrar').setStyle(ButtonStyle.Danger)
+          )
+        ]
+      });
+
+      i.reply({ content: `Ticket creado: ${ch}`, ephemeral: true });
+    }
+
+    // Reclamar ticket
+    if (i.customId === 'claim') {
+      if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
+        return i.reply({ content: '❌ Solo Staff', ephemeral: true });
+      await i.channel.setName(`🎫-claim-${i.user.username}`);
+      i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
+    }
+
+    // Cerrar ticket
+    if (i.customId === 'close') {
+      if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
+        return i.reply({ content: '❌ Solo Staff', ephemeral: true });
+      i.reply('🔒 Cerrando ticket...');
+      setTimeout(() => i.channel.delete(), 5000);
+    }
+  }
 });
 
-/* ───────── WEB SERVER PARA RENDER ───────── */
+/* ───────── WEB SERVER ───────── */
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (_, res) => res.send('Power Luki Network Bot Online ✅'));
