@@ -16,6 +16,10 @@ import {
   SlashCommandBuilder
 } from 'discord.js';
 
+/* ───────── EXPRESS WEB SERVER ───────── */
+const app = express();
+app.get('/', (_, res) => res.send('Power Luki Network Bot Online'));
+
 /* ───────── CLIENT ───────── */
 const client = new Client({
   intents: [
@@ -29,21 +33,14 @@ const client = new Client({
 
 /* ───────── LEVELS ───────── */
 let levels = { users: {} };
-if (fs.existsSync('./levels.json')) {
-  levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
-}
-const saveLevels = () =>
-  fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
+if (fs.existsSync('./levels.json')) levels = JSON.parse(fs.readFileSync('./levels.json', 'utf8'));
+const saveLevels = () => fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
 setInterval(saveLevels, 30000);
 
 /* ───────── INVITES ───────── */
 let invites = {};
-if (fs.existsSync('./invites.json')) {
-  invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
-}
-const saveInvites = () =>
-  fs.writeFileSync('./invites.json', JSON.stringify(invites, null, 2));
-
+if (fs.existsSync('./invites.json')) invites = JSON.parse(fs.readFileSync('./invites.json', 'utf8'));
+const saveInvites = () => fs.writeFileSync('./invites.json', JSON.stringify(invites, null, 2));
 const guildInvites = new Map();
 
 /* ───────── READY ───────── */
@@ -68,12 +65,9 @@ client.on('messageCreate', async msg => {
   data.last = now;
   cooldown.set(msg.author.id, data);
 
-  if (
-    data.count > 5 &&
-    !msg.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)
-  ) {
+  if (data.count > 5 && !msg.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
     await msg.member.timeout(5 * 60 * 1000, 'Spam detectado');
-    const logMute = msg.guild.channels.cache.find(ch => ch.name === '『🔇』silenciados');
+    const logMute = msg.guild.channels.cache.find(c => c.name === '『🔇』silenciados');
     if (logMute) logMute.send(`🛡️ ${msg.author} silenciado **5 minutos** por spam.`);
     return;
   }
@@ -224,17 +218,14 @@ const commands = [
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-await rest.put(
-  Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-  { body: commands }
-);
+await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
 
 /* ───────── INTERACTIONS (SLASH + TICKETS) ───────── */
 client.on('interactionCreate', async i => {
   if (i.isChatInputCommand()) {
+    /* MUTE */
     if (i.commandName === 'mute') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-        return i.reply({ content: '❌ Sin permiso', ephemeral: true });
+      if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return i.reply({ content: '❌ Sin permiso', ephemeral: true });
       const user = i.options.getMember('usuario');
       const t = i.options.getString('tiempo');
       const r = i.options.getString('razon') || 'No especificada';
@@ -246,9 +237,9 @@ client.on('interactionCreate', async i => {
       i.reply(`✅ ${user} silenciado (${t})`);
     }
 
+    /* ANUNCIO */
     if (i.commandName === 'anuncio') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return i.reply({ content: '❌ Sin permiso', ephemeral: true });
+      if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Sin permiso', ephemeral: true });
       const ch = i.guild.channels.cache.find(c => c.name.includes('anuncios'));
       if (!ch) return i.reply('No existe canal anuncios');
       await ch.send({
@@ -266,6 +257,7 @@ client.on('interactionCreate', async i => {
       i.reply({ content: '✅ Anuncio enviado', ephemeral: true });
     }
 
+    /* PANEL TICKETS */
     if (i.commandName === 'panel') {
       i.channel.send({
         embeds: [
@@ -290,9 +282,9 @@ client.on('interactionCreate', async i => {
     }
   }
 
+  /* TICKETS */
   if (i.isButton() && i.customId === 'ticket_open') {
-    if (i.guild.channels.cache.some(c => c.name === `🎫-${i.user.id}`))
-      return i.reply({ content: '❌ Ya tienes un ticket abierto', ephemeral: true });
+    if (i.guild.channels.cache.some(c => c.name === `🎫-${i.user.id}`)) return i.reply({ content: '❌ Ya tienes un ticket abierto', ephemeral: true });
 
     const ch = await i.guild.channels.create({
       name: `🎫-${i.user.id}`,
@@ -325,30 +317,26 @@ client.on('interactionCreate', async i => {
   }
 
   if (i.isButton() && i.customId === 'claim') {
-    if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-      return i.reply({ content: '❌ Solo Staff', ephemeral: true });
+    if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return i.reply({ content: '❌ Solo Staff', ephemeral: true });
     await i.channel.setName(`🎫-claim-${i.user.username}`);
     i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
   }
 
   if (i.isButton() && i.customId === 'close') {
-    if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-      return i.reply({ content: '❌ Solo Staff', ephemeral: true });
+    if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return i.reply({ content: '❌ Solo Staff', ephemeral: true });
     i.reply('🔒 Cerrando ticket...');
     setTimeout(() => i.channel.delete(), 5000);
   }
 });
 
-/* ───────── WEB SERVER ───────── */
+/* ───────── WEB SERVER LISTEN ───────── */
 const port = process.env.PORT;
 if (!port) {
   console.error('⚠️ No se detectó el puerto de Render. Asegúrate de configurar el servicio correctamente.');
   process.exit(1);
 }
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`🌐 Web server activo en puerto ${port}`);
-});
+app.listen(port, '0.0.0.0', () => console.log(`🌐 Web server activo en puerto ${port}`));
+
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN);
-
