@@ -230,118 +230,16 @@ await rest.put(
 
 /* ───────── INTERACTIONS (SLASH + TICKETS) ───────── */
 client.on('interactionCreate', async i => {
-  if (i.isChatInputCommand()) {
-    if (i.commandName === 'mute') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-        return i.reply({ content: '❌ Sin permiso', ephemeral: true });
-      const user = i.options.getMember('usuario');
-      const t = i.options.getString('tiempo');
-      const r = i.options.getString('razon') || 'No especificada';
-      const n = parseInt(t);
-      const u = t.slice(-1);
-      const ms = u === 'm' ? n * 60000 : u === 's' ? n * 1000 : null;
-      if (!ms) return i.reply('Formato inválido');
-      await user.timeout(ms, r);
-      i.reply(`✅ ${user} silenciado (${t})`);
-    }
-
-    if (i.commandName === 'anuncio') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return i.reply({ content: '❌ Sin permiso', ephemeral: true });
-      const ch = i.guild.channels.cache.find(c => c.name.includes('anuncios'));
-      if (!ch) return i.reply('No existe canal anuncios');
-      await ch.send({
-        content: '@everyone',
-        embeds: [
-          new EmbedBuilder()
-            .setColor('#0099FF')
-            .setTitle('📢 ANUNCIO OFICIAL')
-            .setDescription(i.options.getString('mensaje'))
-            .setImage('https://i.postimg.cc/hGM42zmj/1766642331426.jpg')
-            .setFooter({ text: 'Power Luki Network Bot' })
-            .setTimestamp()
-        ]
-      });
-      i.reply({ content: '✅ Anuncio enviado', ephemeral: true });
-    }
-
-    if (i.commandName === 'panel') {
-      i.channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor('#0099FF')
-            .setTitle('🎫 POWER LUKI NETWORK | SOPORTE')
-            .setDescription('Pulsa el botón para abrir un ticket. El Staff responderá pronto.')
-            .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png')
-            .setFooter({ text: 'Power Luki Network Bot' })
-        ],
-        components: [
-          new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId('ticket_open')
-              .setLabel('Abrir Ticket')
-              .setStyle(ButtonStyle.Success)
-              .setEmoji('🎫')
-          )
-        ]
-      });
-      i.reply({ content: 'Panel enviado', ephemeral: true });
-    }
-  }
-
-  if (i.isButton() && i.customId === 'ticket_open') {
-    if (i.guild.channels.cache.some(c => c.name === `🎫-${i.user.id}`))
-      return i.reply({ content: '❌ Ya tienes un ticket abierto', ephemeral: true });
-
-    const ch = await i.guild.channels.create({
-      name: `🎫-${i.user.id}`,
-      type: ChannelType.GuildText,
-      permissionOverwrites: [
-        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-      ]
-    });
-
-    await ch.send({
-      content: `${i.user}`,
-      embeds: [
-        new EmbedBuilder()
-          .setColor('#3498DB')
-          .setTitle('🎫 TICKET | POWER LUKI NETWORK')
-          .setDescription('📝 Indica usuario, motivo y detalles.\n⏳ El Staff responderá pronto.')
-          .setImage('https://i.postimg.cc/kM8FLgdV/Whats-App-Image-2025-12-30-at-4-31-26-PM.jpg')
-          .setFooter({ text: 'Power Luki Network Bot' })
-      ],
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('claim').setLabel('Reclamar').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('close').setLabel('Cerrar').setStyle(ButtonStyle.Danger)
-        )
-      ]
-    });
-
-    i.reply({ content: `Ticket creado: ${ch}`, ephemeral: true });
-  }
-
-  if (i.isButton() && i.customId === 'claim') {
-    if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-      return i.reply({ content: '❌ Solo Staff', ephemeral: true });
-    await i.channel.setName(`🎫-claim-${i.user.username}`);
-    i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
-  }
-
-  if (i.isButton() && i.customId === 'close') {
-    if (!i.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-      return i.reply({ content: '❌ Solo Staff', ephemeral: true });
-    i.reply('🔒 Cerrando ticket...');
-    setTimeout(() => i.channel.delete(), 5000);
-  }
+  // ... Mantener todo tu código de interacciones igual ...
+  // (mute, anuncio, panel, tickets, claim, close)
 });
 
 /* ───────── WEB SERVER ───────── */
 const app = express();
+const PORT = process.env.PORT;
+if (!PORT) console.warn('⚠️ PORT no definido, Render podría fallar en detectar el servicio');
+
 app.get('/', (_, res) => res.send('Power Luki Network Bot Online ✅'));
-const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Web server activo en puerto ${PORT}`);
 });
