@@ -29,10 +29,12 @@ const client = new Client({
 
 const PREFIJO = '!';
 
-/* ───────── BASE DE DATOS ───────── */
+/* ───────── DB NIVELES ───────── */
 const cargarDB = (f, d) => {
   try {
-    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d;
+    return fs.existsSync(f)
+      ? JSON.parse(fs.readFileSync(f, 'utf8'))
+      : d;
   } catch {
     return d;
   }
@@ -48,7 +50,7 @@ setInterval(() => {
 client.once('ready', () => {
   console.log('//////////////////////////////////////////');
   console.log(`✅ BOT CONECTADO: ${client.user.tag}`);
-  console.log('🤖 Power Luki Network está listo.');
+  console.log('🤖 Power Luki Network listo.');
   console.log('//////////////////////////////////////////');
 });
 
@@ -70,19 +72,19 @@ client.on('interactionCreate', async i => {
       });
 
       let config = {
-        titulo: "SOPORTE",
-        preguntas: "**• Describe tu duda:**"
+        titulo: 'SOPORTE',
+        preguntas: '**• Describe tu duda:**'
       };
 
       if (seleccion === 'tk_tienda') {
         config = {
-          titulo: "🛒 SOPORTE DE TIENDA",
-          preguntas: "**• ¿Qué compraste?**\n**• ID de transacción:**\n**• ¿Qué falló?**"
+          titulo: '🛒 SOPORTE DE TIENDA',
+          preguntas: '**• ¿Qué compraste?**\n**• ID de transacción:**\n**• ¿Qué falló?**'
         };
       } else if (seleccion === 'tk_reporte') {
         config = {
-          titulo: "🚫 REPORTE DE USUARIO",
-          preguntas: "**• Usuario:**\n**• Regla rota:**\n**• Pruebas:**"
+          titulo: '🚫 REPORTE DE USUARIO',
+          preguntas: '**• Usuario:**\n**• Regla rota:**\n**• Pruebas:**'
         };
       }
 
@@ -93,8 +95,16 @@ client.on('interactionCreate', async i => {
         .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png');
 
       const botones = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('tk_cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
-        new ButtonBuilder().setCustomId('tk_reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋')
+        new ButtonBuilder()
+          .setCustomId('tk_cerrar')
+          .setLabel('Cerrar')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('🔒'),
+        new ButtonBuilder()
+          .setCustomId('tk_reclamar')
+          .setLabel('Reclamar')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('👋')
       );
 
       await canal.send({ embeds: [embed], components: [botones] });
@@ -113,11 +123,11 @@ client.on('interactionCreate', async i => {
       }
     }
   } catch (err) {
-    console.error('❌ ERROR EN INTERACTION:', err);
+    console.error('❌ ERROR INTERACTION:', err);
   }
 });
 
-/* ───────── MENSAJES Y NIVELES ───────── */
+/* ───────── MENSAJES + NIVELES ───────── */
 client.on('messageCreate', async msg => {
   if (msg.author.bot || !msg.guild) return;
 
@@ -137,7 +147,10 @@ client.on('messageCreate', async msg => {
   const args = msg.content.slice(PREFIJO.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  if (command === 'setup' && msg.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+  if (
+    command === 'setup' &&
+    msg.member.permissions.has(PermissionsBitField.Flags.Administrator)
+  ) {
     const embed = new EmbedBuilder()
       .setColor('#0099FF')
       .setTitle('🎫 CENTRAL DE SOPORTE')
@@ -149,9 +162,15 @@ client.on('messageCreate', async msg => {
         .setCustomId('menu_tickets')
         .setPlaceholder('¿En qué podemos ayudarte?')
         .addOptions(
-          new StringSelectMenuOptionBuilder().setLabel('🛒 Tienda').setValue('tk_tienda'),
-          new StringSelectMenuOptionBuilder().setLabel('🚫 Reportes').setValue('tk_reporte'),
-          new StringSelectMenuOptionBuilder().setLabel('❓ Dudas').setValue('tk_dudas')
+          new StringSelectMenuOptionBuilder()
+            .setLabel('🛒 Tienda')
+            .setValue('tk_tienda'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('🚫 Reportes')
+            .setValue('tk_reporte'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('❓ Dudas')
+            .setValue('tk_dudas')
         )
     );
 
@@ -170,6 +189,8 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 /* ───────── LOGIN ───────── */
-client.login(process.env.TOKEN)
-  .catch(err => console.error('❌ ERROR LOGIN:', err));
+console.log('TOKEN CARGADO:', process.env.TOKEN ? 'SI ✅' : 'NO ❌');
 
+client.login(process.env.TOKEN)
+  .then(() => console.log('🔑 Login enviado a Discord'))
+  .catch(err => console.error('❌ ERROR LOGIN:', err));
