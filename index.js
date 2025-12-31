@@ -16,7 +16,7 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-/* ───────── CONFIGURACIÓN Y URLs ───────── */
+/* ───────── CONFIGURACIÓN Y URLS ───────── */
 const PREFIJO = '!';
 const ROLES_TICKETS = ['Owner', 'Co-Owner', 'Admin', 'Mod', 'Staff'];
 const TICKET_CHANNEL_NAME = '『📖』tickets';
@@ -55,23 +55,50 @@ client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) { console.error(e); }
 
-  // Panel de tickets automático
+  // --- PANEL PRINCIPAL DE TICKETS POWER LUKI ---
   const canal = client.channels.cache.find(c => c.name === TICKET_CHANNEL_NAME);
   if (canal) {
     const msgs = await canal.messages.fetch({ limit: 10 }).catch(() => null);
     if (msgs && !msgs.some(m => m.author.id === client.user.id)) {
-      const embed = new EmbedBuilder()
-        .setColor('#2F3136')
-        .setTitle('🎫 SISTEMA DE TICKETS')
-        .setDescription('Haz clic en un botón para abrir un ticket.')
-        .setImage(PANEL_TICKET_IMAGEN);
+      const embedPowerLuki = new EmbedBuilder()
+        .setColor('#0099ff')
+        .setDescription(
+          `⚙️ **Soporte:** Ayuda general o asistencia en el servidor\n` +
+          `⚠️ **Reportes:** Bugs, errores o problemas en el servidor\n` +
+          `‼️ **Otros:** Diferentes categorías\n` +
+          `🛒 **Compras:** Dudas sobre artículos o servicios\n\n` +
+          `💠 *No abras ticket innecesariamente*`
+        )
+        .setImage(PANEL_TICKET_IMAGEN)
+        .setFooter({ text: 'Power Luki Support | Ticket', iconURL: client.user.displayAvatarURL() });
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('btn_tk_general').setLabel('Soporte').setStyle(ButtonStyle.Primary).setEmoji('🛠️'),
-        new ButtonBuilder().setCustomId('btn_tk_tienda').setLabel('Tienda').setStyle(ButtonStyle.Success).setEmoji('🛒'),
-        new ButtonBuilder().setCustomId('btn_tk_reporte').setLabel('Reporte').setStyle(ButtonStyle.Danger).setEmoji('🚫')
+      const fila1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('crear_ticket_soporte')
+          .setLabel('Support')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('⚙️'),
+        new ButtonBuilder()
+          .setCustomId('crear_ticket_reportes')
+          .setLabel('Reports')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('⚠️')
       );
-      canal.send({ embeds: [embed], components: [row] });
+
+      const fila2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('crear_ticket_otros')
+          .setLabel('Others')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('‼️'),
+        new ButtonBuilder()
+          .setCustomId('crear_ticket_compras')
+          .setLabel('Purchase')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('🛒')
+      );
+
+      await canal.send({ embeds: [embedPowerLuki], components: [fila1, fila2] });
     }
   }
 
@@ -81,82 +108,81 @@ client.once('ready', async () => {
   });
 });
 
-/* ───────── INTERACCIONES DE TICKETS ───────── */
+/* ───────── INTERACCIONES (MODALES Y BOTONES) ───────── */
 client.on('interactionCreate', async i => {
-  // 1. Abrir Modal según tipo de ticket
-  if (i.isButton() && i.customId.startsWith('btn_tk_')) {
-    const tipo = i.customId.split('_')[2];
-    const modal = new ModalBuilder()
-      .setCustomId(`modal_tk_${tipo}`)
-      .setTitle(`Abrir Ticket: ${tipo.toUpperCase()}`);
+  try {
+    // --- BOTONES DEL PANEL PRINCIPAL ---
+    if (i.isButton() && i.customId.startsWith('crear_ticket_')) {
+      const tipo = i.customId.split('_')[2];
+      let titulo = '', descripcion = '';
+      switch(tipo) {
+        case 'soporte': titulo = 'Soporte - Ayuda general'; descripcion = 'Por favor describe tu problema o duda en el servidor.'; break;
+        case 'reportes': titulo = 'Reporte - Bugs o errores'; descripcion = 'Indica detalladamente el error o bug que encontraste.'; break;
+        case 'otros': titulo = 'Otros - Diferentes categorías'; descripcion = 'Especifica la categoría de tu ticket.'; break;
+        case 'compras': titulo = 'Compras - Dudas sobre artículos'; descripcion = 'Escribe tu duda o problema con la compra.'; break;
+      }
 
-    const nickInput = new TextInputBuilder()
-      .setCustomId('nick')
-      .setLabel('Tu nick en el juego')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const descInput = new TextInputBuilder()
-      .setCustomId('desc')
-      .setLabel('Describe tu problema o solicitud')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(nickInput),
-      new ActionRowBuilder().addComponents(descInput)
-    );
-    return i.showModal(modal);
-  }
-
-  // 2. Procesar Modal y crear ticket
-  if (i.type === InteractionType.ModalSubmit && i.customId.startsWith('modal_tk_')) {
-    const tipo = i.customId.split('_')[2];
-    const nick = i.fields.getTextInputValue('nick');
-    const desc = i.fields.getTextInputValue('desc');
-
-    const canal = await i.guild.channels.create({
-      name: `ticket-${i.user.username}`,
-      type: ChannelType.GuildText,
-      permissionOverwrites: [
-        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-        ...ROLES_TICKETS.map(r => {
-          const role = i.guild.roles.cache.find(role => role.name === r);
-          return role ? { id: role.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] } : null;
-        }).filter(Boolean)
-      ]
-    });
-
-    const embed = new EmbedBuilder()
-      .setColor('#2F3136')
-      .setTitle(`🎫 Ticket | ${tipo.toUpperCase()}`)
-      .setDescription(`👋 Hola **${i.user.username}**! El staff responderá pronto\n────────────────────\n**Nick:** ${nick}\n**Problema:** ${desc}\n────────────────────`)
-      .setImage(TICKET_INTERIOR_IMAGEN);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋'),
-      new ButtonBuilder().setCustomId('cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒')
-    );
-
-    await canal.send({ content: `${i.user} | @Power Luki Staff`, embeds: [embed], components: [row] });
-    return i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
-  }
-
-  // 3. Botones Reclamar / Cerrar
-  if (i.isButton()) {
-    const esStaff = ROLES_TICKETS.some(r => i.member.roles.cache.some(role => role.name === r));
-    if (!esStaff) return i.reply({ content: '❌ Solo staff puede usar este botón.', ephemeral: true });
-
-    if (i.customId === 'reclamar') {
-      await i.channel.setName(`✅-${i.user.username}`);
-      return i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
+      const modal = new ModalBuilder().setCustomId(`modal_tk_${tipo}`).setTitle(titulo);
+      const nickInput = new TextInputBuilder().setCustomId('nick').setLabel('Tu nick en el juego').setStyle(TextInputStyle.Short).setRequired(true);
+      const descInput = new TextInputBuilder().setCustomId('desc').setLabel(descripcion).setStyle(TextInputStyle.Paragraph).setRequired(true);
+      modal.addComponents(new ActionRowBuilder().addComponents(nickInput), new ActionRowBuilder().addComponents(descInput));
+      return i.showModal(modal);
     }
 
-    if (i.customId === 'cerrar') {
-      await i.reply('🔒 Cerrando ticket...');
-      setTimeout(() => i.channel.delete().catch(() => {}), 4000);
+    // --- MODALES ---
+    if (i.type === InteractionType.ModalSubmit && i.customId.startsWith('modal_tk_')) {
+      const tipo = i.customId.split('_')[2];
+      const nick = i.fields.getTextInputValue('nick');
+      const desc = i.fields.getTextInputValue('desc');
+
+      const canal = await i.guild.channels.create({
+        name: `ticket-${i.user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+          { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+          ...ROLES_TICKETS.map(r => {
+            const role = i.guild.roles.cache.find(role => role.name === r);
+            return role ? { id: role.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] } : null;
+          }).filter(Boolean)
+        ]
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor('#2F3136')
+        .setTitle(`🎫 Ticket | ${tipo.toUpperCase()}`)
+        .setDescription(`👋 Hola **${i.user.username}**! El staff responderá pronto\n────────────────────\n**Nick:** ${nick}\n**Problema:** ${desc}\n────────────────────`)
+        .setImage(TICKET_INTERIOR_IMAGEN);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋'),
+        new ButtonBuilder().setCustomId('cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+      );
+
+      await canal.send({ content: `${i.user} | @Power Luki Staff`, embeds: [embed], components: [row] });
+      return i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
     }
+
+    // --- BOTONES DENTRO DEL TICKET ---
+    if (i.isButton() && ['reclamar', 'cerrar'].includes(i.customId)) {
+      const esStaff = ROLES_TICKETS.some(r => i.member.roles.cache.some(role => role.name === r));
+      if (!esStaff) return i.reply({ content: '❌ Solo staff puede usar este botón.', ephemeral: true });
+
+      if (i.customId === 'reclamar') {
+        await i.channel.setName(`✅-${i.user.username}`);
+        return i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
+      }
+
+      if (i.customId === 'cerrar') {
+        await i.reply('🔒 Cerrando ticket...');
+        setTimeout(() => i.channel.delete().catch(() => {}), 4000);
+      }
+    }
+
+  } catch (error) {
+    console.error('Error en interactionCreate:', error);
+    if (i.deferred || i.replied) return;
+    i.reply({ content: '❌ Ocurrió un error al procesar la interacción.', ephemeral: true });
   }
 });
 
