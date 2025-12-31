@@ -2,268 +2,206 @@ import 'dotenv/config';
 import fs from 'fs';
 import express from 'express';
 import {
-  Client,
-  GatewayIntentBits,
-  Partials,
-  PermissionsBitField,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ChannelType,
-  StringSelectMenuBuilder,
-  REST,
-  Routes,
-  SlashCommandBuilder
+  Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, 
+  ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType, REST, Routes, SlashCommandBuilder
 } from 'discord.js';
 
-/* ───────── CLIENTE DISCORD ───────── */
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildInvites
+    GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildInvites
   ],
   partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-/* ───────── CONSTANTES ───────── */
+/* ───────── CONFIGURACIÓN Y URLs ───────── */
 const PREFIJO = '!';
 const ROLES_TICKETS = ['Owner', 'Co-Owner', 'Admin', 'Mod', 'Staff'];
 const TICKET_CHANNEL_NAME = '『📖』tickets';
-const AUTO_CLOSE_TIME = 3 * 24 * 60 * 60 * 1000; 
-const ticketTimers = new Map();
-const guildInvites = new Map();
 
-/* ───────── BASE DE DATOS LOCAL ───────── */
+const PANEL_TICKET_IMAGEN = 'https://i.postimg.cc/cJMbjFxK/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png';
+const TICKET_INTERIOR_IMAGEN = 'https://i.postimg.cc/9fS9YhTq/Screenshot-20251230-162814-Whats-App.jpg';
+const BIENVENIDA_IMAGEN = 'https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg';
+const NUEVO_FINAL_IMAGEN = 'https://i.postimg.cc/fLshS3LC/1766642720441.jpg';
+const ANUNCIO_FINAL_IMAGEN = 'https://i.postimg.cc/gJmfkfSq/1766642331426.jpg';
+
+/* ───────── BASE DE DATOS ───────── */
 const cargarDB = (f, d) => { try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d; } catch { return d; } };
 let levels = cargarDB('./levels.json', { users: {} });
 let invitesDB = cargarDB('./invites.json', {});
+const guildInvites = new Map();
 
-const guardarDB = () => {
+setInterval(() => {
   fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
   fs.writeFileSync('./invites.json', JSON.stringify(invitesDB, null, 2));
-};
-setInterval(guardarDB, 30000);
+}, 30000);
 
 /* ───────── COMANDOS SLASH ───────── */
 const commands = [
   new SlashCommandBuilder()
     .setName('mute')
-    .setDescription('Silenciar a un usuario temporalmente')
+    .setDescription('Silenciar a un usuario')
     .addUserOption(opt => opt.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
-    .addStringOption(opt => opt.setName('tiempo').setDescription('Tiempo (ej: 10m, 1h)').setRequired(true))
+    .addStringOption(opt => opt.setName('tiempo').setDescription('Ej: 10m, 1h').setRequired(true))
     .addStringOption(opt => opt.setName('razon').setDescription('Motivo').setRequired(true)),
-  new SlashCommandBuilder()
-    .setName('anuncio')
-    .setDescription('Enviar anuncio')
-    .addStringOption(opt => opt.setName('mensaje').setDescription('Mensaje del anuncio').setRequired(true)),
-  new SlashCommandBuilder()
-    .setName('panel')
-    .setDescription('Desplegar panel de tickets')
 ].map(cmd => cmd.toJSON());
 
-/* ───────── READY ───────── */
+/* ───────── EVENTO READY ───────── */
 client.once('ready', async () => {
-  console.log(`✅ Power Luki Network ONLINE como ${client.user.tag}`);
-
-  // Registro de comandos Slash
+  console.log(`✅ Power Luki Network ONLINE: ${client.user.tag}`);
+  
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('✅ Comandos Slash registrados correctamente');
-  } catch (error) { console.error('❌ Error registro comandos:', error); }
+  } catch (e) { console.error(e); }
 
-  // Panel automático
+  // Panel Automático
   const canal = client.channels.cache.find(c => c.name === TICKET_CHANNEL_NAME);
   if (canal) {
-    const mensajes = await canal.messages.fetch({ limit: 10 }).catch(() => null);
-    if (mensajes && !mensajes.some(m => m.author.id === client.user.id)) {
+    const msgs = await canal.messages.fetch({ limit: 10 }).catch(() => null);
+    if (msgs && !msgs.some(m => m.author.id === client.user.id)) {
       const embed = new EmbedBuilder()
         .setColor('#2F3136')
-        .setTitle('🎫 SISTEMA DE TICKETS | POWER LUKI')
-        .setDescription('Seleccione el tipo de soporte.\n\n📌 **Normas**\n• No spam\n• Respeto al staff\n• Espere respuesta')
-        .setImage('https://i.postimg.cc/9fS9YhTq/Screenshot-20251230-162814-Whats-App.jpg');
+        .setTitle('🎫 SISTEMA DE TICKETS')
+        .setDescription('Haz clic en un botón para abrir un ticket.')
+        .setImage(PANEL_TICKET_IMAGEN);
 
-      const menu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('menu_tickets')
-          .setPlaceholder('📩 Abrir ticket')
-          .addOptions([
-            { label: 'Soporte General', value: 'tk_soporte', emoji: '🛠️' },
-            { label: 'Soporte Tienda', value: 'tk_tienda', emoji: '🛒' },
-            { label: 'Reporte de Jugador', value: 'tk_reporte', emoji: '🚫' }
-          ])
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('btn_tk_general').setLabel('Soporte').setStyle(ButtonStyle.Primary).setEmoji('🛠️'),
+        new ButtonBuilder().setCustomId('btn_tk_tienda').setLabel('Tienda').setStyle(ButtonStyle.Success).setEmoji('🛒'),
+        new ButtonBuilder().setCustomId('btn_tk_reporte').setLabel('Reporte').setStyle(ButtonStyle.Danger).setEmoji('🚫')
       );
-      await canal.send({ embeds: [embed], components: [menu] }).catch(() => {});
+      canal.send({ embeds: [embed], components: [row] });
     }
   }
 
-  // Cachear invitaciones
-  client.guilds.cache.forEach(async guild => {
-    const firstInvites = await guild.invites.fetch().catch(() => null);
-    if (firstInvites) guildInvites.set(guild.id, new Map(firstInvites.map(i => [i.code, i.uses])));
+  client.guilds.cache.forEach(async g => {
+    const invs = await g.invites.fetch().catch(() => null);
+    if (invs) guildInvites.set(g.id, new Map(invs.map(i => [i.code, i.uses])));
   });
 });
 
-/* ───────── SISTEMA DE NIVELES ───────── */
-client.on('messageCreate', async msg => {
-  if (!msg.guild || msg.author.bot) return;
+/* ───────── INTERACCIONES (MODALS Y BOTONES) ───────── */
+client.on('interactionCreate', async i => {
+  // 1. Mostrar Modal al presionar botón
+  if (i.isButton() && i.customId.startsWith('btn_tk_')) {
+    const tipo = i.customId.split('_')[2];
+    const modal = new ModalBuilder().setCustomId(`modal_tk_${tipo}`).setTitle('DATOS DEL TICKET');
+    
+    const nickInput = new TextInputBuilder().setCustomId('nick').setLabel('Tu Nick en el juego').setStyle(TextInputStyle.Short).setRequired(true);
+    const descInput = new TextInputBuilder().setCustomId('desc').setLabel('Cuéntanos tu problema').setStyle(TextInputStyle.Paragraph).setRequired(true);
 
+    modal.addComponents(new ActionRowBuilder().addComponents(nickInput), new ActionRowBuilder().addComponents(descInput));
+    return await i.showModal(modal);
+  }
+
+  // 2. Procesar el Modal enviado
+  if (i.type === InteractionType.ModalSubmit) {
+    const tipo = i.customId.split('_')[2];
+    const nick = i.fields.getTextInputValue('nick');
+    const desc = i.fields.getTextInputValue('desc');
+
+    const canal = await i.guild.channels.create({
+      name: `ticket-${i.user.username}`,
+      type: ChannelType.GuildText,
+      permissionOverwrites: [
+        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+      ]
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor('#2F3136')
+      .setTitle(`SOPORTE | ${tipo.toUpperCase()}`)
+      .setDescription(`👋 Hola **${i.user.username}**! El staff responderá pronto\n────────────────────\n**Nick:** ${nick}\n**Problema:** ${desc}\n────────────────────`)
+      .setImage(TICKET_INTERIOR_IMAGEN);
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋'),
+      new ButtonBuilder().setCustomId('cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+    );
+
+    await canal.send({ content: `${i.user} | @Power Luki Staff`, embeds: [embed], components: [row] });
+    return i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
+  }
+
+  // 3. Reclamar / Cerrar
+  if (i.isButton()) {
+    const esStaff = ROLES_TICKETS.some(r => i.member.roles.cache.some(role => role.name === r));
+    if (i.customId === 'reclamar') {
+      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
+      await i.channel.setName(`✅-${i.user.username}`);
+      i.reply(`👋 Atendido por **${i.user.username}**`);
+    }
+    if (i.customId === 'cerrar') {
+      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
+      await i.reply('🔒 Cerrando...');
+      setTimeout(() => i.channel.delete().catch(() => {}), 4000);
+    }
+  }
+});
+
+/* ───────── MENSAJES (!ANUNCIO, !NUEVO, NIVELES) ───────── */
+client.on('messageCreate', async msg => {
+  if (msg.author.bot || !msg.guild) return;
+
+  // Sistema Nivel
   const id = msg.author.id;
   if (!levels.users[id]) levels.users[id] = { xp: 0, level: 1 };
   levels.users[id].xp += 15;
-  
   if (levels.users[id].xp >= levels.users[id].level * 150) {
-    levels.users[id].level++;
-    levels.users[id].xp = 0;
+    levels.users[id].level++; levels.users[id].xp = 0;
     const ch = msg.guild.channels.cache.find(c => c.name.includes('niveles'));
-    if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FFD700').setDescription(`🎉 **${msg.author.username}** subió al **Nivel ${levels.users[id].level}**!`)] });
+    if (ch) ch.send(`🎉 **${msg.author.username}** alcanzó el Nivel **${levels.users[id].level}**`);
   }
 
   if (!msg.content.startsWith(PREFIJO)) return;
   const args = msg.content.slice(PREFIJO.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  if (command === 'ban' && msg.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
-    const user = msg.mentions.members.first();
-    if (user) { await user.ban().catch(() => {}); msg.reply('✅ Baneado.'); }
+  if (['anuncio', 'nuevo'].includes(command)) {
+    if (!msg.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+    const isAnuncio = command === 'anuncio';
+    const canal = msg.guild.channels.cache.find(c => c.name === (isAnuncio ? '『📣』anuncios' : '『🎊』nuevo'));
+    const imgFinal = isAnuncio ? ANUNCIO_FINAL_IMAGEN : NUEVO_FINAL_IMAGEN;
+
+    const texto = args.filter(a => !a.startsWith('http')).join(' ');
+    const imgs = args.filter(a => a.startsWith('http'));
+
+    const embed = new EmbedBuilder()
+      .setColor(isAnuncio ? '#FFCC00' : '#00FF00')
+      .setTitle(isAnuncio ? '📢 ANUNCIO OFICIAL' : '✨ NUEVA NOVEDAD')
+      .setDescription(texto || '...')
+      .setImage(imgs[0] || imgFinal);
+
+    await canal.send({ content: isAnuncio ? '@everyone' : '', embeds: [embed] });
+    
+    // Mandar el resto de imágenes y la final
+    for (let j = 1; j < imgs.length; j++) await canal.send({ embeds: [new EmbedBuilder().setImage(imgs[j]).setColor(embed.data.color)] });
+    if (imgs.length > 0) await canal.send({ embeds: [new EmbedBuilder().setImage(imgFinal).setColor(embed.data.color)] });
+
+    msg.delete().catch(() => {});
   }
 });
 
 /* ───────── BIENVENIDAS ───────── */
-client.on('guildMemberAdd', async member => {
-  const ch = member.guild.channels.cache.find(c => c.name.includes('bienvenidos'));
+client.on('guildMemberAdd', async m => {
+  const ch = m.guild.channels.cache.find(c => c.name.includes('bienvenidos'));
   if (!ch) return;
-
-  const newInvites = await member.guild.invites.fetch().catch(() => null);
-  const oldInvites = guildInvites.get(member.guild.id);
+  const invs = await m.guild.invites.fetch().catch(() => null);
+  const old = guildInvites.get(m.guild.id);
   let inviter = 'Desconocido', count = 0;
-
-  if (newInvites && oldInvites) {
-    const invite = newInvites.find(i => i.uses > (oldInvites.get(i.code) || 0));
-    if (invite && invite.inviter) {
-      inviter = invite.inviter.username;
-      invitesDB[invite.inviter.id] = (invitesDB[invite.inviter.id] || 0) + 1;
-      count = invitesDB[invite.inviter.id];
-    }
-    guildInvites.set(member.guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
+  if (invs && old) {
+    const invite = invs.find(i => i.uses > (old.get(i.code) || 0));
+    if (invite) { inviter = invite.inviter.username; invitesDB[invite.inviter.id] = (invitesDB[invite.inviter.id] || 0) + 1; count = invitesDB[invite.inviter.id]; }
+    guildInvites.set(m.guild.id, new Map(invs.map(i => [i.code, i.uses])));
   }
-
-  const embed = new EmbedBuilder()
-    .setColor('#00E5FF')
-    .setTitle('✨ ¡Bienvenido a Power Luki Network!')
-    .setDescription(`👤 **${member.user.username}**\n🔗 Invitado por: **${inviter}** (${count} invs)`)
-    .setImage('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg')
-    .setThumbnail(member.user.displayAvatarURL());
-
-  ch.send({ embeds: [embed] }).catch(() => {});
+  const embed = new EmbedBuilder().setColor('#00E5FF').setTitle('✨ BIENVENIDO').setDescription(`👤 **${m.user.username}**\n🔗 Invitado por: **${inviter}** (${count} invs)`).setImage(BIENVENIDA_IMAGEN);
+  ch.send({ embeds: [embed] });
 });
 
-/* ───────── SISTEMA DE TICKETS ───────── */
-client.on('interactionCreate', async i => {
-  if (i.isStringSelectMenu() && i.customId === 'menu_tickets') {
-    const permisos = [
-      { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-    ];
-    ROLES_TICKETS.forEach(n => {
-      const r = i.guild.roles.cache.find(role => role.name === n);
-      if (r) permisos.push({ id: r.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] });
-    });
-
-    const canal = await i.guild.channels.create({
-      name: `ticket-${i.user.username}`,
-      type: ChannelType.GuildText,
-      permissionOverwrites: permisos
-    });
-
-    let titulo = '🛠️ SOPORTE GENERAL', preguntas = '**Nick:**\n\n**Describe tu problema:**';
-    if (i.values[0] === 'tk_tienda') { titulo = '🛒 SOPORTE DE TIENDA'; preguntas = '**Nick:**\n\n**ID de compra:**\n\n**Problema:**'; }
-    else if (i.values[0] === 'tk_reporte') { titulo = '🚫 REPORTE DE JUGADOR'; preguntas = '**Tu nick:**\n\n**Nick reportado:**\n\n**Pruebas:**'; }
-
-    const embed = new EmbedBuilder()
-      .setColor('#2F3136')
-      .setTitle(titulo)
-      .setDescription(`👋 Hola ${i.user}\n⏳ El staff responderá pronto\n────────────────────\n${preguntas}`)
-      .setImage('https://i.postimg.cc/9fS9YhTq/Screenshot-20251230-162814-Whats-App.jpg');
-
-    const botones = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('reclamar_ticket').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋'),
-      new ButtonBuilder().setCustomId('cerrar_ticket').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒')
-    );
-
-    await canal.send({ content: `${i.user} | @Staff`, embeds: [embed], components: [botones] });
-    await i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
-  }
-
-  if (i.isButton()) {
-    const esStaff = ROLES_TICKETS.some(n => i.member.roles.cache.some(r => r.name === n));
-    if (i.customId === 'reclamar_ticket') {
-      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
-      await i.channel.setName(`✅-${i.user.username}`).catch(() => {});
-      await i.reply(`👋 Ticket atendido por ${i.user.username}`);
-    }
-    if (i.customId === 'cerrar_ticket') {
-      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
-      await i.reply('🔒 Cerrando en 5s...');
-      setTimeout(() => i.channel.delete().catch(() => {}), 5000);
-    }
-  }
-
-  // Comandos Slash
-  if (i.isChatInputCommand()) {
-    if (i.commandName === 'panel') {
-      const embed = new EmbedBuilder()
-        .setColor('#0099FF')
-        .setTitle('🎫 POWER LUKI NETWORK | SOPORTE')
-        .setDescription('Usa el menú para abrir un ticket.')
-        .setImage('https://i.postimg.cc/9fS9YhTq/Screenshot-20251230-162814-Whats-App.jpg');
-
-      const menu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('menu_tickets')
-          .setPlaceholder('📩 Seleccionar categoría')
-          .addOptions([
-            { label: 'Soporte General', value: 'tk_soporte', emoji: '🛠️' },
-            { label: 'Soporte Tienda', value: 'tk_tienda', emoji: '🛒' },
-            { label: 'Reporte de Jugador', value: 'tk_reporte', emoji: '🚫' }
-          ])
-      );
-      await i.channel.send({ embeds: [embed], components: [menu] });
-      await i.reply({ content: '✅ Panel enviado', ephemeral: true });
-    }
-
-    if (i.commandName === 'mute') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return i.reply({ content: '❌ No tienes permisos.', ephemeral: true });
-      const target = i.options.getMember('usuario');
-      const tiempo = i.options.getString('tiempo');
-      const razon = i.options.getString('razon');
-      let ms = parseInt(tiempo) * 60000;
-      if (tiempo.includes('h')) ms = parseInt(tiempo) * 3600000;
-
-      await target.timeout(ms, razon).then(() => {
-        i.reply({ embeds: [new EmbedBuilder().setColor('#FF0000').setTitle('🔇 Usuario Silenciado').addFields({ name: 'Usuario', value: `${target}`, inline: true }, { name: 'Razón', value: razon })] });
-      }).catch(() => i.reply({ content: '❌ Error al silenciar.', ephemeral: true }));
-    }
-    
-    if (i.commandName === 'anuncio') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Solo admins.', ephemeral: true });
-      const msgAnuncio = i.options.getString('mensaje');
-      const embed = new EmbedBuilder().setColor('#FFCC00').setTitle('📢 ANUNCIO').setDescription(msgAnuncio).setFooter({ text: 'Power Luki Network' });
-      await i.channel.send({ embeds: [embed] });
-      await i.reply({ content: '✅ Anuncio enviado', ephemeral: true });
-    }
-  }
-});
-
-/* ───────── SERVIDOR WEB ───────── */
 const app = express();
-app.get('/', (req, res) => res.send('Power Luki Network ✅'));
-app.listen(process.env.PORT || 10000, '0.0.0.0', () => {
-  console.log('🌐 Servidor Web activo');
-  client.login(process.env.TOKEN).catch(err => console.error('❌ Error login:', err));
-});
+app.get('/', (r, s) => s.send('Power Luki ✅'));
+app.listen(process.env.PORT || 10000, () => client.login(process.env.TOKEN));
