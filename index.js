@@ -132,3 +132,4 @@ client.on('interactionCreate', async i => {
 const app = express();
 app.get('/', (req, res) => res.send('Bot Online ✅'));
 app.listen(process.env.PORT || 10000, () => client.login(process.env.TOKEN));
+
