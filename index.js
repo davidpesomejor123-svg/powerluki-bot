@@ -28,57 +28,86 @@ const client = new Client({
 
 const PREFIJO = '!';
 
-/* ───────── BASE DE DATOS LOCAL ───────── */
+// --- BASE DE DATOS ---
 const cargarDB = (f, d) => { try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d; } catch { return d; } };
 let niveles = cargarDB('./levels.json', { usuarios: {} });
-let invitesDB = cargarDB('./invites.json', {});
-const cacheInvs = new Map();
 
 setInterval(() => {
   fs.writeFileSync('./levels.json', JSON.stringify(niveles, null, 2));
-  fs.writeFileSync('./invites.json', JSON.stringify(invitesDB, null, 2));
 }, 30000);
 
-/* ───────── EVENTOS DE INICIO ───────── */
+// --- EVENTO READY (CONSOLA) ---
 client.once('ready', () => {
-  console.log(`✅ Power Luki Network ONLINE: ${client.user.tag}`);
-  client.guilds.cache.forEach(async g => {
-    try { const invs = await g.invites.fetch(); cacheInvs.set(g.id, new Map(invs.map(i => [i.code, i.uses]))); } catch {}
-  });
+  console.log('//////////////////////////////////////////');
+  console.log(`✅ BOT CONECTADO: ${client.user.tag}`);
+  console.log('🤖 Power Luki Network está listo.');
+  console.log('//////////////////////////////////////////');
 });
 
-/* ───────── BIENVENIDA Y DESPEDIDA ───────── */
-client.on('guildMemberAdd', async m => {
-  const ch = m.guild.channels.cache.find(c => c.name.includes('bienvenida'));
-  if (!ch) return;
-  const nuevas = await m.guild.invites.fetch();
-  const viejas = cacheInvs.get(m.guild.id);
-  let inviter = 'Desconocido';
-  if (viejas) {
-    const inv = nuevas.find(i => i.uses > (viejas.get(i.code) || 0));
-    if (inv) inviter = inv.inviter?.username || 'Sistema';
+// --- SISTEMA DE TICKETS AUTOMÁTICO ---
+client.on('interactionCreate', async i => {
+  if (i.isStringSelectMenu() && i.customId === 'menu_tickets') {
+    const seleccion = i.values[0];
+    
+    const canal = await i.guild.channels.create({
+      name: `ticket-${i.user.username}`,
+      type: ChannelType.GuildText,
+      permissionOverwrites: [
+        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+      ]
+    });
+
+    let config = {
+      titulo: "SOPORTE",
+      preguntas: "**• Describe tu duda:**"
+    };
+
+    if (seleccion === 'tk_tienda') {
+      config = {
+        titulo: "🛒 SOPORTE DE TIENDA",
+        preguntas: "**• ¿Qué compraste?**\n**• ¿ID de transacción?**\n**• ¿Qué fallo ocurrió exactamente?**"
+      };
+    } else if (seleccion === 'tk_reporte') {
+      config = {
+        titulo: "🚫 REPORTE DE USUARIO",
+        preguntas: "**• Nick del usuario:**\n**• ¿Qué regla rompió?**\n**• Pruebas (Foto/Link):**"
+      };
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#2F3136')
+      .setTitle(config.titulo)
+      .setDescription(`¡Hola ${i.user}! Bienvenido al soporte.\n\n${config.preguntas}\n\n──────────────────────────`)
+      .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png');
+
+    const botones = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('tk_cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
+      new ButtonBuilder().setCustomId('tk_reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋')
+    );
+
+    await canal.send({ content: `${i.user} | @Staff`, embeds: [embed], components: [botones] });
+    await i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
   }
-  cacheInvs.set(m.guild.id, new Map(nuevas.map(i => [i.code, i.uses])));
 
-  const embed = new EmbedBuilder()
-    .setColor('#00E5FF')
-    .setTitle('✨ ¡BIENVENIDO!')
-    .setDescription(`👤 **${m.user.username}** se unió.\n🔗 Invitado por: **${inviter}**`)
-    .setImage('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg')
-    .setThumbnail(m.user.displayAvatarURL());
-  ch.send({ embeds: [embed] });
+  // BOTONES INTERNOS
+  if (i.isButton()) {
+    if (i.customId === 'tk_reclamar') {
+      await i.channel.setName(`✅-${i.user.username}`);
+      i.reply(`👋 El staff **${i.user.username}** ha tomado el ticket.`);
+    }
+    if (i.customId === 'tk_cerrar') {
+      await i.reply('Cerrando...');
+      setTimeout(() => i.channel.delete().catch(() => {}), 3000);
+    }
+  }
 });
 
-client.on('guildMemberRemove', m => {
-  const ch = m.guild.channels.cache.find(c => c.name.includes('despedida'));
-  if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FF4D4D').setDescription(`😔 **${m.user.username}** salió del servidor.`)] });
-});
-
-/* ───────── COMANDOS Y NIVELES ───────── */
+// --- COMANDOS Y NIVELES ---
 client.on('messageCreate', async msg => {
   if (msg.author.bot || !msg.guild) return;
 
-  // Sistema de Niveles
+  // Niveles
   const id = msg.author.id;
   if (!niveles.usuarios[id]) niveles.usuarios[id] = { xp: 0, nivel: 1 };
   niveles.usuarios[id].xp += 15;
@@ -93,12 +122,12 @@ client.on('messageCreate', async msg => {
   const args = msg.content.slice(PREFIJO.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // COMANDO !SETUP PARA EL PANEL
+  // !setup - CREA EL PANEL PERMANENTE
   if (command === 'setup' && msg.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
     const embed = new EmbedBuilder()
       .setColor('#0099FF')
-      .setTitle('🎫 CENTRAL DE SOPORTE | POWER LUKI')
-      .setDescription('Selecciona una categoría para abrir un ticket.')
+      .setTitle('🎫 CENTRAL DE SOPORTE')
+      .setDescription('Selecciona una categoría para recibir ayuda.')
       .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png');
 
     const menu = new ActionRowBuilder().addComponents(
@@ -106,87 +135,31 @@ client.on('messageCreate', async msg => {
         .setCustomId('menu_tickets')
         .setPlaceholder('¿En qué podemos ayudarte?')
         .addOptions(
-          new StringSelectMenuOptionBuilder().setLabel('🛒 Tienda / Compras').setValue('tk_tienda').setEmoji('💰'),
-          new StringSelectMenuOptionBuilder().setLabel('🚫 Reportar Jugador').setValue('tk_reporte').setEmoji('🚩'),
-          new StringSelectMenuOptionBuilder().setLabel('⚖️ Apelaciones').setValue('tk_apelacion').setEmoji('🛡️'),
-          new StringSelectMenuOptionBuilder().setLabel('❓ Dudas Generales').setValue('tk_dudas').setEmoji('💬')
+          new StringSelectMenuOptionBuilder().setLabel('🛒 Tienda').setValue('tk_tienda').setEmoji('💰'),
+          new StringSelectMenuOptionBuilder().setLabel('🚫 Reportes').setValue('tk_reporte').setEmoji('🚩'),
+          new StringSelectMenuOptionBuilder().setLabel('❓ Dudas').setValue('tk_dudas').setEmoji('💬')
         )
     );
     await msg.channel.send({ embeds: [embed], components: [menu] });
     msg.delete();
   }
 
-  // COMANDOS DE MODERACIÓN
+  // MODERACIÓN
   if (command === 'ban' && msg.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
     const user = msg.mentions.members.first();
-    if (user) { await user.ban(); msg.reply(`✅ Baneado.`); }
-  }
-
-  if (command === 'mute' && msg.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-    const user = msg.mentions.members.first();
-    const tiempo = parseInt(args[1]) * 60000;
-    if (user && !isNaN(tiempo)) { await user.timeout(tiempo); msg.reply(`🔇 Silenciado.`); }
+    if (user) { await user.ban(); msg.reply('✅ Usuario baneado.'); }
   }
 });
 
-/* ───────── LÓGICA DE TICKETS ───────── */
-client.on('interactionCreate', async i => {
-  if (i.isStringSelectMenu() && i.customId === 'menu_tickets') {
-    const seleccion = i.values[0];
-    const canal = await i.guild.channels.create({
-      name: `ticket-${i.user.username}`,
-      type: ChannelType.GuildText,
-      permissionOverwrites: [
-        { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-      ]
-    });
-
-    let titulo = "SOPORTE";
-    let preguntas = "";
-
-    if (seleccion === 'tk_tienda') {
-      titulo = "🛒 TIENDA";
-      preguntas = "**• ¿Qué compraste?**\n**• ID de transacción:**\n**• ¿Qué fallo ocurrió?**";
-    } else if (seleccion === 'tk_reporte') {
-      titulo = "🚫 REPORTE";
-      preguntas = "**• Nick del reportado:**\n**• Motivo:**\n**• Pruebas:**";
-    } else if (seleccion === 'tk_apelacion') {
-      titulo = "⚖️ APELACIÓN";
-      preguntas = "**• ¿Por qué te banearon?**\n**• ¿Quién te baneo?**";
-    } else {
-      titulo = "❓ DUDAS";
-      preguntas = "**• Escribe tu duda aquí:**";
-    }
-
-    const embedTicket = new EmbedBuilder()
-      .setColor('#2F3136')
-      .setTitle(titulo)
-      .setDescription(`¡Hola ${i.user}! Rellena estos datos:\n──────────────────────────\n${preguntas}\n──────────────────────────`)
-      .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png');
-
-    const botones = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('tk_cerrar').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
-      new ButtonBuilder().setCustomId('tk_reclamar').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋')
-    );
-
-    await canal.send({ content: `${i.user} | @Staff`, embeds: [embedTicket], components: [botones] });
-    i.reply({ content: `✅ Ticket creado: ${canal}`, ephemeral: true });
-  }
-
-  if (i.isButton()) {
-    if (i.customId === 'tk_reclamar') {
-      await i.channel.setName(`✅-${i.user.username}`);
-      i.reply(`👋 Staff **${i.user.username}** al mando.`);
-    }
-    if (i.customId === 'tk_cerrar') {
-      await i.reply('Cerrando...');
-      setTimeout(() => i.channel.delete().catch(() => {}), 3000);
-    }
-  }
-});
-
-/* ───────── SERVIDOR WEB ───────── */
+// --- SERVIDOR WEB Y LOGIN ---
 const app = express();
-app.get('/', (req, res) => res.send('Power Luki Network ✅'));
-app.listen(process.env.PORT || 10000, '0.0.0.0', () => client.login(process.env.TOKEN));
+app.get('/', (req, res) => res.send('Power Luki bot is LIVE ✅'));
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🌐 Servidor Web en puerto ${PORT}`);
+  // LOGIN DENTRO DEL SERVER WEB PARA ASEGURAR CONEXIÓN
+  client.login(process.env.TOKEN).catch(err => {
+    console.error('❌ ERROR DE LOGIN:', err.message);
+  });
+});
