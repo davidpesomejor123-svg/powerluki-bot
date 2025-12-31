@@ -245,3 +245,5 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Servidor web activo en puert
 
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN);
+ .then(() => console.log('✅ Bot conectado a Discord'))
+  .catch(err => console.error('❌ Error al conectar el bot:', err));
