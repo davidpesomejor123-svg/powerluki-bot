@@ -16,86 +16,74 @@ import {
   SlashCommandBuilder
 } from 'discord.js';
 
-/* ───────── CONFIGURACIÓN INICIAL ───────── */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildModeration
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildPresences
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.User]
+  partials: [Partials.Channel, Partials.Message, Partials.User, Partials.GuildMember]
 });
 
-// Carga de bases de datos locales
-const loadDB = (path, def) => {
-  try { return fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : def; }
-  catch { return def; }
-};
-
+/* ───────── BASES DE DATOS LOCALES ───────── */
+const loadDB = (f, d) => { try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d; } catch { return d; } };
 let levels = loadDB('./levels.json', { users: {} });
 let invitesDB = loadDB('./invites.json', {});
 const guildInvites = new Map();
 
-// Guardado automático cada 30 segundos
 setInterval(() => {
   fs.writeFileSync('./levels.json', JSON.stringify(levels, null, 2));
   fs.writeFileSync('./invites.json', JSON.stringify(invitesDB, null, 2));
 }, 30000);
 
-/* ───────── COMANDOS SLASH (REVISADOS) ───────── */
+/* ───────── REGISTRO DE COMANDOS (REVISADO PARA EVITAR EL ERROR DE RENDER) ───────── */
 const commands = [
   new SlashCommandBuilder()
     .setName('mute')
     .setDescription('Silenciar a un usuario')
     .addUserOption(o => o.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
-    .addStringOption(o => o.setName('tiempo').setDescription('Ej: 10m, 1h').setRequired(true))
-    .addStringOption(o => o.setName('razon').setDescription('Motivo del silencio').setRequired(true)),
+    .addStringOption(o => o.setName('tiempo').setDescription('Tiempo (ej: 10m, 1h)').setRequired(true))
+    .addStringOption(o => o.setName('razon').setDescription('Motivo').setRequired(true)),
   
   new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Banear a un usuario')
     .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
-    .addStringOption(o => o.setName('razon').setDescription('Motivo del baneo').setRequired(true)),
+    .addStringOption(o => o.setName('razon').setDescription('Motivo').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('panel')
+    .setDescription('Enviar el panel de soporte técnico'),
 
   new SlashCommandBuilder()
     .setName('anuncio')
     .setDescription('Enviar un anuncio oficial')
-    .addStringOption(o => o.setName('mensaje').setDescription('Contenido del anuncio').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('panel')
-    .setDescription('Enviar el panel de tickets de soporte')
+    .addStringOption(o => o.setName('mensaje').setDescription('Contenido del anuncio').setRequired(true))
 ].map(c => c.toJSON());
 
-/* ───────── EVENTO READY ───────── */
 client.once('ready', async () => {
   console.log(`✅ Power Luki Network ONLINE: ${client.user.tag}`);
-  
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    console.log('✅ Comandos registrados');
-  } catch (e) { console.error('❌ Error Comandos:', e); }
+    console.log('✅ Comandos Slash sincronizados');
+  } catch (e) { console.error('❌ Error en Comandos:', e); }
 
   client.guilds.cache.forEach(async g => {
-    try {
-      const invs = await g.invites.fetch();
-      guildInvites.set(g.id, new Map(invs.map(i => [i.code, i.uses])));
-    } catch (e) {}
+    try { const invs = await g.invites.fetch(); guildInvites.set(g.id, new Map(invs.map(i => [i.code, i.uses]))); } catch {}
   });
 });
 
-/* ───────── BIENVENIDA Y DESPEDIDA ───────── */
+/* ───────── BIENVENIDA, DESPEDIDA Y NIVELES ───────── */
 client.on('guildMemberAdd', async member => {
   const ch = member.guild.channels.cache.find(c => c.name.includes('bienvenidos'));
   if (!ch) return;
-
   const newInvs = await member.guild.invites.fetch();
   const oldInvs = guildInvites.get(member.guild.id);
   let inviter = 'Desconocido';
-
   if (oldInvs) {
     const invite = newInvs.find(i => i.uses > (oldInvs.get(i.code) || 0));
     if (invite) inviter = invite.inviter?.username || 'Desconocido';
@@ -104,8 +92,8 @@ client.on('guildMemberAdd', async member => {
 
   const embed = new EmbedBuilder()
     .setColor('#00E5FF')
-    .setTitle('✨ ¡BIENVENIDO A POWER LUKI NETWORK!')
-    .setDescription(`👤 **${member.user.username}** ha llegado.\n🔗 Invitado por: **${inviter}**`)
+    .setTitle('✨ ¡BIENVENIDO!')
+    .setDescription(`👤 **${member.user.username}** se unió.\n🔗 Invitado por: **${inviter}**`)
     .setImage('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg')
     .setThumbnail(member.user.displayAvatarURL());
   ch.send({ embeds: [embed] });
@@ -113,24 +101,14 @@ client.on('guildMemberAdd', async member => {
 
 client.on('guildMemberRemove', member => {
   const ch = member.guild.channels.cache.find(c => c.name.includes('despedidas'));
-  if (!ch) return;
-
-  const embed = new EmbedBuilder()
-    .setColor('#FF4D4D')
-    .setTitle('😔 HASTA PRONTO')
-    .setDescription(`**${member.user.username}** abandonó la comunidad de Power Luki Network.`)
-    .setThumbnail(member.user.displayAvatarURL());
-  ch.send({ embeds: [embed] });
+  if (ch) ch.send({ embeds: [new EmbedBuilder().setColor('#FF4D4D').setDescription(`😔 **${member.user.username}** salió del servidor.`)] });
 });
 
-/* ───────── NIVELES Y MODERACIÓN ───────── */
 client.on('messageCreate', async msg => {
   if (!msg.guild || msg.author.bot) return;
-
   const id = msg.author.id;
   if (!levels.users[id]) levels.users[id] = { xp: 0, level: 1 };
   levels.users[id].xp += 15;
-
   if (levels.users[id].xp >= levels.users[id].level * 150) {
     levels.users[id].level++;
     levels.users[id].xp = 0;
@@ -139,43 +117,37 @@ client.on('messageCreate', async msg => {
   }
 });
 
-/* ───────── INTERACCIONES (TICKETS Y COMANDOS) ───────── */
+/* ───────── TICKETS (ESTILO FOTO NAUTICMC) Y MODERACIÓN ───────── */
 client.on('interactionCreate', async i => {
   if (i.isChatInputCommand()) {
     if (i.commandName === 'panel') {
       const embed = new EmbedBuilder()
         .setColor('#0099FF')
         .setTitle('🎫 POWER LUKI NETWORK | SOPORTE')
-        .setDescription('Pulsa el botón para abrir un ticket.')
+        .setDescription('Haz clic abajo para contactar con el Staff.')
         .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png');
-      
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('tk_create').setLabel('Abrir Ticket').setStyle(ButtonStyle.Success).setEmoji('🎫')
-      );
+      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('tk_open').setLabel('Abrir Ticket').setStyle(ButtonStyle.Success).setEmoji('🎫'));
       await i.channel.send({ embeds: [embed], components: [row] });
       return i.reply({ content: 'Panel enviado', ephemeral: true });
     }
 
-    if (i.commandName === 'ban') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return i.reply('Sin permisos.');
+    if (i.commandName === 'mute') {
       const user = i.options.getMember('usuario');
-      const razon = i.options.getString('razon');
-      await user.ban({ reason: razon });
-      i.reply(`✅ ${user.user.tag} ha sido baneado.`);
+      const time = i.options.getString('tiempo');
+      let ms = parseInt(time) * 60000;
+      await user.timeout(ms, i.options.getString('razon'));
+      i.reply(`✅ ${user} silenciado.`);
     }
 
-    if (i.commandName === 'mute') {
-      if (!i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return i.reply('Sin permisos.');
+    if (i.commandName === 'ban') {
       const user = i.options.getMember('usuario');
-      const tiempo = i.options.getString('tiempo');
-      let ms = parseInt(tiempo) * 60000;
-      await user.timeout(ms, i.options.getString('razon'));
-      i.reply(`✅ ${user.user.tag} silenciado por ${tiempo}.`);
+      await user.ban({ reason: i.options.getString('razon') });
+      i.reply(`✅ ${user} baneado.`);
     }
   }
 
   if (i.isButton()) {
-    if (i.customId === 'tk_create') {
+    if (i.customId === 'tk_open') {
       const channel = await i.guild.channels.create({
         name: `ticket-${i.user.username}`,
         type: ChannelType.GuildText,
@@ -185,37 +157,35 @@ client.on('interactionCreate', async i => {
         ]
       });
 
-      const embed = new EmbedBuilder()
+      const ticketEmbed = new EmbedBuilder()
         .setColor('#2F3136')
         .setTitle('SOPORTE DISCORD')
-        .setDescription(`¡Hola ${i.user}! Bienvenido al soporte de **Power Luki Network**\n\nPor favor describe tu problema y espera al Staff.\n\n──────────────────────────\n**Nick de Usuario:**\n**Problema:**\n──────────────────────────`)
+        .setDescription(`¡Hola ${i.user}! Bienvenido al soporte de **Power Luki Network**\n\nNuestro staff le responderá pronto. **Sea paciente.**\n\n──────────────────────────\n**¿Cuál es tu nick?:**\n(Escríbelo abajo)\n\n**Describe tu problema:**\n(Danos detalles)\n──────────────────────────`)
         .setImage('https://i.postimg.cc/k5vR9HPj/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png');
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('tk_close').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
-        new ButtonBuilder().setCustomId('tk_claim').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('🏷️')
+        new ButtonBuilder().setCustomId('tk_claim').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('👋')
       );
 
-      await channel.send({ content: `${i.user} | @here`, embeds: [embed], components: [row] });
-      i.reply({ content: `✅ Ticket: ${channel}`, ephemeral: true });
+      await channel.send({ content: `${i.user} | @Staff`, embeds: [ticketEmbed], components: [row] });
+      i.reply({ content: `✅ Ticket creado: ${channel}`, ephemeral: true });
     }
-
     if (i.customId === 'tk_claim') {
       await i.channel.setName(`✅-${i.user.username}`);
       i.reply(`👋 Atendido por **${i.user.username}**`);
     }
-
     if (i.customId === 'tk_close') {
-      await i.reply('Cerrando en 5 segundos...');
-      setTimeout(() => i.channel.delete().catch(() => {}), 5000);
+      await i.reply('Cerrando...');
+      setTimeout(() => i.channel.delete().catch(() => {}), 3000);
     }
   }
 });
 
-/* ───────── WEB SERVER Y LOGIN ───────── */
+/* ───────── SERVIDOR WEB PARA RENDER ───────── */
 const app = express();
-app.get('/', (req, res) => res.send('Power Luki Network ✅'));
+app.get('/', (req, res) => res.send('Power Luki Online ✅'));
 app.listen(process.env.PORT || 10000, '0.0.0.0', () => {
-  console.log('🌐 Web Server Activo');
-  client.login(process.env.TOKEN).catch(e => console.error('❌ Login:', e));
+  console.log('🌐 Servidor Web activo en puerto 10000');
+  client.login(process.env.TOKEN);
 });
