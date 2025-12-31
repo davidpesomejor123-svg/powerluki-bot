@@ -248,3 +248,4 @@ client.login(process.env.TOKEN)
   .then(() => console.log('✅ Bot conectado a Discord'))
   .catch(err => console.error('❌ Error al conectar el bot:', err));
 
+
