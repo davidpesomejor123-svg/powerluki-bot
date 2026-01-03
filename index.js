@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import fs from 'fs';
 import express from 'express';
 import {
   Client,
@@ -13,10 +12,7 @@ import {
   ChannelType,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle,
-  REST,
-  Routes,
-  SlashCommandBuilder
+  TextInputStyle
 } from 'discord.js';
 
 /* ───────── CLIENTE ───────── */
@@ -34,15 +30,30 @@ const client = new Client({
 
 /* ───────── CONFIGURACIÓN ───────── */
 const PREFIJO = '!';
+
 const ROLES_TICKETS = ['Owner', 'Co-Owner', 'Admin', 'Manager', 'Mod', 'Staff'];
+const ROLES_ANUNCIOS = ['Owner', 'Co-Owner', 'Admin', 'Manager'];
+
 const TICKET_CHANNEL_NAME = '『📖』tickets';
+const CANAL_SILENCIADOS = '『🔇』silenciados';
+const CANAL_DESILENCIADOS = '『🔉』desilenciados';
+const CANAL_BIENVENIDOS = '『👋』bienvenidos';
+const CANAL_DESPEDIDAS = '『😔』despedidas';
 
 const PANEL_TICKET_IMAGEN = 'https://i.postimg.cc/cJMbjFxK/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png';
 const TICKET_INTERIOR_IMAGEN = 'https://i.postimg.cc/9fS9YhTq/Screenshot-20251230-162814-Whats-App.jpg';
+const BIENVENIDA_IMAGEN = 'https://i.postimg.cc/cJMbjFxK/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png';
+const DESPEDIDA_IMAGEN = 'https://i.postimg.cc/cJMbjFxK/Gemini-Generated-Image-eg3cc2eg3cc2eg3c.png';
 
-/* ───────── AUTOCIERRE ───────── */
-const AUTO_CLOSE_TIME = 3 * 24 * 60 * 60 * 1000; // 3 días
-const ticketActivity = new Map(); // canalId -> timestamp
+/* ───────── TICKETS AUTOCIERRE ───────── */
+const AUTO_CLOSE_TIME = 3 * 24 * 60 * 60 * 1000;
+const ticketActivity = new Map();
+
+/* ───────── ANTI SPAM ───────── */
+const SPAM_LIMIT = 5;
+const SPAM_TIME = 7000;
+const TIMEOUT_MIN = 10;
+const spamMap = new Map();
 
 /* ───────── READY ───────── */
 client.once('ready', async () => {
@@ -63,166 +74,109 @@ client.once('ready', async () => {
       `🛒 **Compras:** Tienda y servicios\n\n` +
       `💠 *No abras tickets innecesarios*`
     )
-    .setImage(PANEL_TICKET_IMAGEN)
-    .setFooter({ text: 'Power Luki Support', iconURL: client.user.displayAvatarURL() });
+    .setImage(PANEL_TICKET_IMAGEN);
 
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('crear_ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
-    new ButtonBuilder().setCustomId('crear_ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Secondary).setEmoji('⚠️')
+    new ButtonBuilder().setCustomId('crear_ticket_soporte').setLabel('Soporte').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('crear_ticket_reportes').setLabel('Reportes').setStyle(ButtonStyle.Secondary)
   );
 
   const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('crear_ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Danger).setEmoji('‼️'),
-    new ButtonBuilder().setCustomId('crear_ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success).setEmoji('🛒')
+    new ButtonBuilder().setCustomId('crear_ticket_otros').setLabel('Otros').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('crear_ticket_compras').setLabel('Compras').setStyle(ButtonStyle.Success)
   );
 
   await canal.send({ embeds: [embed], components: [row1, row2] });
 });
 
-/* ───────── INTERACCIONES ───────── */
-client.on('interactionCreate', async i => {
-  try {
-    /* ── BOTONES CREAR TICKET ── */
-    if (i.isButton() && i.customId.startsWith('crear_ticket_')) {
-      if (i.replied || i.deferred) return;
+/* ───────── BIENVENIDAS ───────── */
+client.on('guildMemberAdd', member => {
+  const canal = member.guild.channels.cache.find(c => c.name === CANAL_BIENVENIDOS);
+  if (!canal) return;
 
-      const tipo = i.customId.split('_')[2];
+  const embed = new EmbedBuilder()
+    .setColor('#00ffff')
+    .setDescription(
+      `✨ ¡Bienvenido, **${member.user.username}**.! ✨\n` +
+      `-_- - **POWER LUKI NETWORK** -_- \n\n` +
+      `💎 **${member.user.username}** ha llegado a nuestra comunidad.\n` +
+      `🎇 ¡Disfruta tu estadía!`
+    )
+    .setImage(BIENVENIDA_IMAGEN)
+    .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' });
 
-      const titulos = {
-        soporte: 'Soporte General',
-        reportes: 'Reporte de Errores',
-        otros: 'Otras Consultas',
-        compras: 'Asistencia de Compras'
-      };
-
-      const labels = {
-        soporte: 'Describe tu problema:',
-        reportes: 'Describe el bug o error:',
-        otros: 'Motivo del ticket:',
-        compras: 'Duda sobre la compra:'
-      };
-
-      const modal = new ModalBuilder()
-        .setCustomId(`modal_ticket_${tipo}`)
-        .setTitle(titulos[tipo]);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('nick')
-            .setLabel('Tu nick en el juego')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('desc')
-            .setLabel(labels[tipo])
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
-        )
-      );
-
-      await i.showModal(modal).catch(() => {});
-      return;
-    }
-
-    /* ── MODAL SUBMIT ── */
-    if (i.isModalSubmit() && i.customId.startsWith('modal_ticket_')) {
-      await i.deferReply({ ephemeral: true });
-
-      const tipo = i.customId.split('_')[2];
-      const nick = i.fields.getTextInputValue('nick');
-      const desc = i.fields.getTextInputValue('desc');
-
-      const canal = await i.guild.channels.create({
-        name: `ticket-${i.user.username}`,
-        type: ChannelType.GuildText,
-        permissionOverwrites: [
-          { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-          ...ROLES_TICKETS.map(r => {
-            const role = i.guild.roles.cache.find(ro => ro.name === r);
-            return role
-              ? { id: role.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-              : null;
-          }).filter(Boolean)
-        ]
-      });
-
-      ticketActivity.set(canal.id, Date.now());
-
-      const embed = new EmbedBuilder()
-        .setColor('#2F3136')
-        .setTitle(`🎫 Ticket | ${tipo.toUpperCase()}`)
-        .setDescription(
-          `👤 **Usuario:** ${i.user}\n` +
-          `🎮 **Nick:** ${nick}\n` +
-          `📝 **Detalle:** ${desc}\n\n` +
-          `⏳ Un staff te atenderá pronto.`
-        )
-        .setImage(TICKET_INTERIOR_IMAGEN);
-
-      const botones = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('reclamar_tk').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('🎫'),
-        new ButtonBuilder().setCustomId('cerrar_tk').setLabel('Cerrar').setStyle(ButtonStyle.Danger).setEmoji('🔒')
-      );
-
-      await canal.send({ content: `${i.user}`, embeds: [embed], components: [botones] });
-      return i.editReply({ content: `✅ Ticket creado: ${canal}` });
-    }
-
-    /* ── BOTONES STAFF ── */
-    if (i.isButton() && ['reclamar_tk', 'cerrar_tk'].includes(i.customId)) {
-      const esStaff = ROLES_TICKETS.some(r => i.member.roles.cache.some(role => role.name === r));
-      if (!esStaff) return i.reply({ content: '❌ Solo staff.', ephemeral: true });
-
-      if (i.customId === 'reclamar_tk') {
-        await i.channel.setName(`✅-${i.user.username}`);
-        return i.reply(`👋 Ticket reclamado por **${i.user.username}**`);
-      }
-
-      if (i.customId === 'cerrar_tk') {
-        ticketActivity.delete(i.channel.id);
-        await i.reply('🔒 Cerrando ticket...');
-        setTimeout(() => i.channel.delete().catch(() => {}), 4000);
-      }
-    }
-  } catch (e) {
-    console.error('Error interacción:', e);
-  }
+  canal.send({ embeds: [embed] });
 });
 
-/* ───────── ACTUALIZAR ACTIVIDAD ───────── */
-client.on('messageCreate', msg => {
+/* ───────── DESPEDIDAS ───────── */
+client.on('guildMemberRemove', member => {
+  const canal = member.guild.channels.cache.find(c => c.name === CANAL_DESPEDIDAS);
+  if (!canal) return;
+
+  const ahora = new Date();
+  const embed = new EmbedBuilder()
+    .setColor('#ff5555')
+    .setDescription(
+      `😔 ¡Hasta pronto, **${member.user.username}**! 😔\n` +
+      `- - - • **POWER LUKI NETWORK** • - - -\n\n` +
+      `╭━━━━━━━━━━━━━━━━━━━━━━━╮\n` +
+      `💔 **${member.user.username}** nos deja temporalmente.\n` +
+      `🌟 Esperamos volver a verte pronto en Power Luki Network.\n` +
+      `╰━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+      `📌 Recuerda que siempre eres parte de nuestra comunidad.\n` +
+      `- - - • *Siempre Bienvenido* • - - -`
+    )
+    .setImage(DESPEDIDA_IMAGEN)
+    .setFooter({
+      text: `Power Luki Network • Nos vemos pronto • ${ahora.toLocaleString()}`
+    });
+
+  canal.send({ embeds: [embed] });
+});
+
+/* ───────── ANTI SPAM + SILENCIO ───────── */
+client.on('messageCreate', async msg => {
   if (!msg.guild || msg.author.bot) return;
-  if (!msg.channel.name.startsWith('ticket-') && !msg.channel.name.startsWith('✅-')) return;
-  ticketActivity.set(msg.channel.id, Date.now());
+
+  /* Anti-spam */
+  const now = Date.now();
+  const data = spamMap.get(msg.author.id) || { count: 0, last: now };
+  data.count = now - data.last > SPAM_TIME ? 1 : data.count + 1;
+  data.last = now;
+  spamMap.set(msg.author.id, data);
+
+  if (data.count >= SPAM_LIMIT) {
+    const member = await msg.guild.members.fetch(msg.author.id);
+    if (!member.communicationDisabledUntilTimestamp) {
+      const dur = TIMEOUT_MIN * 60 * 1000;
+      const inicio = new Date();
+      const fin = new Date(inicio.getTime() + dur);
+
+      await member.timeout(dur, 'Spam automático');
+
+      const canal = msg.guild.channels.cache.find(c => c.name === CANAL_SILENCIADOS);
+      if (canal) {
+        canal.send(
+          `🔇 **Usuario:** ${member}\n` +
+          `👮 **Silenciado por:** BOT\n` +
+          `📄 **Motivo:** Spam\n` +
+          `⏱️ **Duración:** ${TIMEOUT_MIN} minutos\n` +
+          `🕒 **Inicio:** ${inicio.toLocaleTimeString()}\n` +
+          `🕓 **Fin:** ${fin.toLocaleTimeString()}`
+        );
+      }
+    }
+    spamMap.delete(msg.author.id);
+  }
 });
 
-/* ───────── AUTOCIERRE ───────── */
-setInterval(async () => {
-  const now = Date.now();
-
-  for (const [channelId, last] of ticketActivity.entries()) {
-    if (now - last < AUTO_CLOSE_TIME) continue;
-
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    if (!channel) {
-      ticketActivity.delete(channelId);
-      continue;
-    }
-
-    await channel.send('⏰ **Ticket cerrado automáticamente por 3 días de inactividad.**');
-    setTimeout(() => channel.delete().catch(() => {}), 5000);
-    ticketActivity.delete(channelId);
+/* ───────── DESILENCIADO ───────── */
+client.on('guildMemberUpdate', (oldM, newM) => {
+  if (oldM.communicationDisabledUntilTimestamp && !newM.communicationDisabledUntilTimestamp) {
+    const canal = newM.guild.channels.cache.find(c => c.name === CANAL_DESILENCIADOS);
+    if (canal) canal.send(`🔊 El usuario ${newM.user} ha sido desilenciado.`);
   }
-}, 60 * 60 * 1000);
-
-/* ───────── SEGURIDAD ───────── */
-process.on('unhandledRejection', err => console.error('UnhandledRejection:', err));
-process.on('uncaughtException', err => console.error('UncaughtException:', err));
-client.on('error', err => console.error('ClientError:', err));
+});
 
 /* ───────── WEB SERVER ───────── */
 const app = express();
