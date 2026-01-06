@@ -34,6 +34,7 @@ const client = new Client({
 /* ───────── CONFIG ───────── */
 const CONFIG = {
   PREFIJO: '!',
+  MAIN_GUILD_ID: '1340442398442127480',
   CANALES: {
     TICKETS: '『📖』tickets',
     NIVELES: '『🆙』niveles',
@@ -280,8 +281,85 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // --- Slash commands ---
     if (interaction.isChatInputCommand()) {
-      // (mantener toda la lógica de slash commands que ya tenías)
-      // Para ahorrar espacio en este archivo en canvas, asume que ese bloque se copia tal cual.
+      const { commandName } = interaction;
+
+      // ===== /ANUNCIO =====
+      if (commandName === 'anuncio') {
+        if (!isStaffMember(interaction.member)) {
+          return interaction.reply({ content: '❌ Solo el staff puede usar este comando.', ephemeral: true });
+        }
+
+        const mainGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
+        if (!mainGuild) {
+          return interaction.reply({ content: '❌ No puedo acceder al servidor principal.', ephemeral: true });
+        }
+
+        const canal = mainGuild.channels.cache.find(c => c.name === CONFIG.CANALES.ANUNCIOS);
+        if (!canal) {
+          return interaction.reply({ content: '❌ No se encontró el canal de anuncios en el servidor principal.', ephemeral: true });
+        }
+
+        const texto = interaction.options.getString('texto', true);
+        const att1 = interaction.options.getAttachment('image1');
+        const att2 = interaction.options.getAttachment('image2');
+        const att3 = interaction.options.getAttachment('image3');
+
+        const embed = new EmbedBuilder()
+          .setTitle('📣 Anuncio Oficial')
+          .setDescription(texto)
+          .setColor('#0099ff')
+          .setFooter({ text: `Enviado por ${interaction.user.tag}` })
+          .setTimestamp();
+
+        const files = [];
+        if (att1) files.push(att1);
+        if (att2) files.push(att2);
+        if (att3) files.push(att3);
+
+        await canal.send({ content: '||@everyone||', embeds: [embed], files }).catch(() => {});
+        return interaction.reply({ content: '✅ Anuncio enviado al **servidor principal**.', ephemeral: true });
+      }
+
+      // ===== /NUEVO =====
+      if (commandName === 'nuevo') {
+        if (!isStaffMember(interaction.member)) {
+          return interaction.reply({ content: '❌ Solo el staff puede usar este comando.', ephemeral: true });
+        }
+
+        const mainGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
+        if (!mainGuild) {
+          return interaction.reply({ content: '❌ No puedo acceder al servidor principal.', ephemeral: true });
+        }
+
+        const canal = mainGuild.channels.cache.find(c => c.name === CONFIG.CANALES.NUEVO);
+        if (!canal) {
+          return interaction.reply({ content: '❌ No se encontró el canal de nuevo en el servidor principal.', ephemeral: true });
+        }
+
+        const texto = interaction.options.getString('texto', true);
+        const att1 = interaction.options.getAttachment('image1');
+        const att2 = interaction.options.getAttachment('image2');
+        const att3 = interaction.options.getAttachment('image3');
+
+        const embed = new EmbedBuilder()
+          .setTitle('🎊 Novedad')
+          .setDescription(texto)
+          .setColor('#00cc66')
+          .setFooter({ text: `Publicado por ${interaction.user.tag}` })
+          .setTimestamp();
+
+        const files = [];
+        if (att1) files.push(att1);
+        if (att2) files.push(att2);
+        if (att3) files.push(att3);
+
+        // imagen obligatoria al final
+        files.push('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg');
+
+        await canal.send({ content: '||@everyone||', embeds: [embed], files }).catch(() => {});
+        return interaction.reply({ content: '✅ Publicación enviada al **servidor principal**.', ephemeral: true });
+      }
+
       return;
     }
 
