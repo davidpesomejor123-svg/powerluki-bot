@@ -312,12 +312,17 @@ client.on('interactionCreate', async (interaction) => {
           .setTimestamp();
 
         const files = [];
-        if (att1) files.push(att1);
-        if (att2) files.push(att2);
-        if (att3) files.push(att3);
+        if (att1) files.push({ attachment: att1.url, name: att1.name || 'image1' });
+        if (att2) files.push({ attachment: att2.url, name: att2.name || 'image2' });
+        if (att3) files.push({ attachment: att3.url, name: att3.name || 'image3' });
 
-        await canal.send({ content: '||@everyone||', embeds: [embed], files }).catch(() => {});
-        return interaction.reply({ content: '✅ Anuncio enviado al **servidor principal**.', ephemeral: true });
+        try {
+          await canal.send({ content: '||@everyone||', embeds: [embed], files });
+          return interaction.reply({ content: '✅ Anuncio enviado al servidor principal.', ephemeral: true });
+        } catch (err) {
+          console.error('Error enviando anuncio', err);
+          return interaction.reply({ content: '❌ Error al enviar anuncio. Revisa permisos y tamaño de archivo.', ephemeral: true });
+        }
       }
 
       // ===== /NUEVO =====
@@ -342,22 +347,26 @@ client.on('interactionCreate', async (interaction) => {
         const att3 = interaction.options.getAttachment('image3');
 
         const embed = new EmbedBuilder()
-          .setTitle('🎊 Novedad')
+          .setTitle('🎊 Nuevo')
           .setDescription(texto)
           .setColor('#00cc66')
           .setFooter({ text: `Publicado por ${interaction.user.tag}` })
           .setTimestamp();
 
         const files = [];
-        if (att1) files.push(att1);
-        if (att2) files.push(att2);
-        if (att3) files.push(att3);
-
+        if (att1) files.push({ attachment: att1.url, name: att1.name || 'image1' });
+        if (att2) files.push({ attachment: att2.url, name: att2.name || 'image2' });
+        if (att3) files.push({ attachment: att3.url, name: att3.name || 'image3' });
         // imagen obligatoria al final
-        files.push('https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg');
+        files.push({ attachment: 'https://i.postimg.cc/Pf0DW9hM/1766642720441.jpg', name: 'nuevo_end.jpg' });
 
-        await canal.send({ content: '||@everyone||', embeds: [embed], files }).catch(() => {});
-        return interaction.reply({ content: '✅ Publicación enviada al **servidor principal**.', ephemeral: true });
+        try {
+          await canal.send({ content: '||@everyone||', embeds: [embed], files });
+          return interaction.reply({ content: '✅ Nuevo enviado al servidor principal.', ephemeral: true });
+        } catch (err) {
+          console.error('Error enviando nuevo', err);
+          return interaction.reply({ content: '❌ Error al enviar nuevo. Revisa permisos y tamaño de archivo.', ephemeral: true });
+        }
       }
 
       return;
