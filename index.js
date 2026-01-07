@@ -372,7 +372,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // --- Buttons for ticket panel and ticket close ---
+    // --- Buttons for ticket panel and ticket close / claim ---
     if (interaction.isButton()) {
       const id = interaction.customId;
 
@@ -383,6 +383,45 @@ client.on('interactionCreate', async (interaction) => {
         setTimeout(() => {
           if (interaction.channel?.delete) interaction.channel.delete().catch(() => {});
         }, 5000);
+        return;
+      }
+
+      // Reclamar ticket (solo staff)
+      if (id === 'ticket_claim') {
+        // Solo tickets dentro de un canal ticket-*
+        if (!interaction.channel || !interaction.channel.name?.startsWith('ticket-')) {
+          return interaction.reply({ content: '❌ Esto solo se puede usar dentro de un canal de ticket.', ephemeral: true });
+        }
+        if (!isStaffMember(interaction.member)) {
+          return interaction.reply({ content: '❌ Solo el staff puede reclamar tickets.', ephemeral: true });
+        }
+
+        // Encontrar el mensaje original del ticket (con los botones)
+        const msgs = await interaction.channel.messages.fetch({ limit: 50 }).catch(() => new Collection());
+        const panelMsg = msgs.find(m => m.author?.id === client.user.id && m.components?.length && m.components[0].components.some(c => c.customId === 'ticket_claim'));
+        try {
+          // Editar componentes para deshabilitar botón de reclamar y mostrar quien reclamó
+          if (panelMsg) {
+            const updatedRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId('ticket_claim').setLabel(`Reclamado por ${interaction.user.username}`).setStyle(ButtonStyle.Secondary).setEmoji('🧑‍⚖️').setDisabled(true),
+              new ButtonBuilder().setCustomId('ticket_close').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+            );
+            await panelMsg.edit({ components: [updatedRow] }).catch(() => {});
+          }
+
+          // Notificar en el canal quién reclamó
+          const claimEmbed = new EmbedBuilder()
+            .setTitle('🟢 Ticket reclamado')
+            .setDescription(`Este ticket ha sido reclamado por ${interaction.user}.`)
+            .setColor('#2ecc71')
+            .setTimestamp();
+          await interaction.channel.send({ embeds: [claimEmbed] }).catch(() => {});
+
+          await interaction.reply({ content: `✅ Has reclamado el ticket.`, ephemeral: true });
+        } catch (err) {
+          console.error('Error reclamando ticket', err);
+          if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: '❌ Error al reclamar el ticket.', ephemeral: true }).catch(() => {});
+        }
         return;
       }
 
@@ -467,28 +506,61 @@ client.on('interactionCreate', async (interaction) => {
 
       if (!ticketChannel) return interaction.reply({ content: '❌ No pude crear el ticket.', ephemeral: true });
 
-      let content = `🎫 **Ticket ${tipo.toUpperCase()} creado por** ${interaction.user.tag}\n\n`;
+      // Preparar contenido del embed en función del tipo
+      let tituloCampo = '';
+      let valorCampo = '';
       if (tipo === 'soporte') {
         const asunto = interaction.fields.getTextInputValue('soporte_asunto');
         const desc = interaction.fields.getTextInputValue('soporte_desc');
-        content += `**Asunto:** ${asunto}\n**Detalle:**\n${desc}`;
+        tituloCampo = asunto;
+        valorCampo = desc;
       } else if (tipo === 'reportes') {
         const objetivo = interaction.fields.getTextInputValue('reportes_objetivo');
         const pruebas = interaction.fields.getTextInputValue('reportes_prueba');
-        content += `**Objetivo:** ${objetivo}\n**Pruebas / Descripción:**\n${pruebas}`;
+        tituloCampo = objetivo;
+        valorCampo = pruebas;
       } else if (tipo === 'tienda') {
         const item = interaction.fields.getTextInputValue('tienda_item');
         const detalle = interaction.fields.getTextInputValue('tienda_detalle');
-        content += `**Producto / Servicio:** ${item}\n**Detalles:**\n${detalle}`;
+        tituloCampo = item;
+        valorCampo = detalle;
       } else {
         const titulo = interaction.fields.getTextInputValue('otros_titulo');
         const descripcion = interaction.fields.getTextInputValue('otros_descripcion');
-        content += `**Título:** ${titulo}\n**Descripción:**\n${descripcion}`;
+        tituloCampo = titulo;
+        valorCampo = descripcion;
       }
 
-      const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_close').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒'));
+      // Roles de staff reales para mencionar en el canal (si existen)
+      const staffRoleObjects = STAFF_ROLE_NAMES.map(n => interaction.guild.roles.cache.find(r => r.name === n)).filter(Boolean);
+      const staffMentions = staffRoleObjects.length ? staffRoleObjects.map(r => `<@&${r.id}>`).join(' ') : 'No se encontró rol de staff';
 
-      await ticketChannel.send({ content, components: [row] }).catch(() => {});
+      const ticketEmbed = new EmbedBuilder()
+        .setTitle(`🎫 Ticket • ${tipo.toUpperCase()}`)
+        .setColor('#2b2d31')
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .addFields(
+          { name: '👤 Creador', value: `${interaction.user.tag} (<@${interaction.user.id}>)`, inline: true },
+          { name: '📂 Tipo', value: tipo, inline: true },
+          { name: '📌 Estado', value: 'Abierto', inline: true },
+          { name: tituloCampo ? `📝 ${tituloCampo}` : 'Descripción', value: valorCampo || 'Sin descripción', inline: false },
+          { name: '👥 Staff', value: staffMentions, inline: false }
+        )
+        .setImage(CONFIG.IMAGENES.TICKET_INTERIOR)
+        .setFooter({ text: `Ticket creado • Power Luki Network` })
+        .setTimestamp();
+
+      // Botones: Reclamar + Cerrar
+      const ticketControls = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ticket_claim').setLabel('Reclamar').setStyle(ButtonStyle.Primary).setEmoji('🧑‍⚖️'),
+        new ButtonBuilder().setCustomId('ticket_close').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+      );
+
+      // Mensaje inicial: mencionar staff para avisar
+      const pingContent = staffRoleObjects.length ? staffRoleObjects.map(r => `<@&${r.id}>`).join(' ') : '';
+
+      await ticketChannel.setTopic(`Ticket ${tipo} • creado por ${interaction.user.tag}`).catch(() => {});
+      await ticketChannel.send({ content: pingContent || undefined, embeds: [ticketEmbed], components: [ticketControls] }).catch(() => {});
 
       // Responder al submit indicando el canal (usa mención válida)
       await interaction.reply({ content: `✅ Ticket creado: <#${ticketChannel.id}>`, ephemeral: true }).catch(() => {});
