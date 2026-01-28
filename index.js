@@ -75,6 +75,7 @@ function loadJSON(filePath, defaultValue) {
     return defaultValue;
   }
 }
+
 function saveJSON(filePath, data) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
@@ -163,10 +164,9 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // Lógica de tickets simplificada (Mantenida de tu config original pero funcional)
   if (interaction.isButton() && interaction.customId === 'ticket_close') {
-      await interaction.reply({ content: '🔒 Cerrando en 5 segundos...', ephemeral: true });
-      setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+    await interaction.reply({ content: '🔒 Cerrando en 5 segundos...', ephemeral: true });
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
   }
 });
 
@@ -174,75 +174,92 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
 
-  const msg = message.content.toLowerCase();
+  const content = message.content.toLowerCase().trim();
 
-  // --- RESPUESTA AUTOMÁTICA IP ---
-  if (msg === 'ip' || msg.includes('como entro') || msg === '.ip') {
+  // ───── IP / CONEXIÓN ─────
+  if (
+    content === 'ip' ||
+    content === '.ip' ||
+    content === '!ip' ||
+    content === 'direccion' ||
+    content.includes('como entro')
+  ) {
     const ipEmbed = new EmbedBuilder()
-      .setTitle('『🌐』INFORMACIÓN DE CONEXIÓN')
-      .setColor('#5865F2')
+      .setTitle('『🌐』 INFORMACIÓN DE CONEXIÓN')
+      .setColor('#00AAFF')
       .setDescription(
-        `¡Hola **${message.author.username}**! Aquí tienes los datos para unirte:\n\n` +
-        `> **--- JAVA EDITION ---**\n` +
-        `> :ip: **IP:** \`${CONFIG.SERVER_IP}\` \n` +
-        `> **Versiones:** \`${CONFIG.VERSIONS}\` \n\n` +
-        `> **--- BEDROCK EDITION ---**\n` +
-        `> :bedrock: **IP:** \`${CONFIG.SERVER_IP}\` \n` +
-        `> **Puerto:** \`${CONFIG.SERVER_PORT}\` \n\n` +
-        `___`
+        `━━━━━━━━━━━━━━━━━━\n\n` +
+        `🌐 **JAVA EDITION**\n` +
+        `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
+        `> **Versiones:** \`${CONFIG.VERSIONS}\`\n\n` +
+        `📱 **BEDROCK EDITION**\n` +
+        `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
+        `> **Puerto:** \`${CONFIG.SERVER_PORT}\`\n\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `*Si tienes problemas para entrar, contacta con un Staff.*`
       )
-      .setFooter({ text: 'PowerMax Network - ¡Te esperamos!' })
+      .setFooter({ text: 'PowerMax Network' })
       .setTimestamp();
 
     return message.reply({ embeds: [ipEmbed] });
   }
 
-  // --- RESPUESTA AUTOMÁTICA TIENDA ---
-  if (msg.includes('tienda') || msg.includes('donar') || msg === '.tienda') {
+  // ───── TIENDA ─────
+  if (
+    content === 'tienda' ||
+    content === '.tienda' ||
+    content.includes('donar') ||
+    content.includes('comprar')
+  ) {
     const shopEmbed = new EmbedBuilder()
-      .setTitle('『🛒』TIENDA OFICIAL')
-      .setColor('#F1C40F')
+      .setTitle('『🛒』 TIENDA OFICIAL')
+      .setColor('#FFCC00')
       .setDescription(
-        `Apoya al servidor adquiriendo rangos y beneficios únicos:\n\n` +
-        `**--- ENLACE ---**\n` +
-        `🔗 [tienda.powermax.com](https://google.com)\n\n` +
-        `> _¡Tu compra nos ayuda a seguir mejorando!_`
+        `━━━━━━━━━━━━━━━━━━\n\n` +
+        `**¡Apoya al servidor comprando rangos y mejoras!**\n\n` +
+        `🔗 https://tienda.powermax.com\n\n` +
+        `━━━━━━━━━━━━━━━━━━`
       );
+
     return message.reply({ embeds: [shopEmbed] });
   }
 
-  // --- SISTEMA DE NIVELES MEJORADO ---
+  // ───── SISTEMA DE NIVELES ─────
   const userId = message.author.id;
   let data = nivelesDB.get(userId) || { xp: 0, nivel: 1, lastXP: 0 };
 
   if (Date.now() - data.lastXP > 60000) {
     data.xp += Math.floor(Math.random() * 15) + 10;
     data.lastXP = Date.now();
-    
-    const xpNecesaria = data.nivel * 250; 
+
+    const xpNecesaria = data.nivel * 250;
 
     if (data.xp >= xpNecesaria) {
       data.nivel++;
       data.xp = 0;
-      
-      const canalNiveles = message.guild.channels.cache.find(c => c.name === CONFIG.CANALES.NIVELES);
+
+      const canalNiveles = message.guild.channels.cache.find(
+        c => c.name === CONFIG.CANALES.NIVELES
+      );
+
       if (canalNiveles) {
         const lvEmbed = new EmbedBuilder()
-          .setTitle('『🆙』¡NUEVO NIVEL ALCANZADO!')
+          .setTitle('『🆙』 ¡NUEVO NIVEL!')
           .setColor('#FFD700')
           .setThumbnail(message.author.displayAvatarURL())
           .setDescription(
-            `\n---\n` +
-            `🎉 ¡Felicidades **${message.author.username}**!\n` +
-            `Has subido al **Nivel ${data.nivel}**\n` +
-            `---\n` +
-            `> Sigue chateando para desbloquear más recompensas.`
+            `🎉 **${message.author.username}** ha subido al **Nivel ${data.nivel}**\n\n` +
+            `> Sigue participando para desbloquear recompensas.`
           )
           .setFooter({ text: 'PowerMax Leveling System' });
-          
-        canalNiveles.send({ content: `¡Oye ${message.author}!`, embeds: [lvEmbed] }).catch(() => {});
+
+        canalNiveles.send({
+          content: `🔥 ¡Felicidades ${message.author}!`,
+          embeds: [lvEmbed]
+        }).catch(() => {});
       }
     }
+
     nivelesDB.set(userId, data);
   }
 });
