@@ -170,101 +170,129 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-/* ───────── MENSAJES: IP, TIENDA Y NIVELES ───────── */
+/* ───────── MENSAJES: IP, TIENDA Y NIVELES (COMPLETO) ───────── */
 client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
+  try {
+    if (message.author.bot || !message.guild) return;
 
-  const content = message.content.toLowerCase().trim();
+    const raw = message.content || '';
+    const content = raw.toLowerCase().trim();
 
-  // ───── IP / CONEXIÓN ─────
-  if (
-    content === 'ip' ||
-    content === '.ip' ||
-    content === '!ip' ||
-    content === 'direccion' ||
-    content.includes('como entro')
-  ) {
-    const ipEmbed = new EmbedBuilder()
-      .setTitle('『🌐』 INFORMACIÓN DE CONEXIÓN')
-      .setColor('#00AAFF')
-      .setDescription(
-        `━━━━━━━━━━━━━━━━━━\n\n` +
-        `🌐 **JAVA EDITION**\n` +
-        `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
-        `> **Versiones:** \`${CONFIG.VERSIONS}\`\n\n` +
-        `📱 **BEDROCK EDITION**\n` +
-        `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
-        `> **Puerto:** \`${CONFIG.SERVER_PORT}\`\n\n` +
-        `━━━━━━━━━━━━━━━━━━\n` +
-        `*Si tienes problemas para entrar, contacta con un Staff.*`
-      )
-      .setFooter({ text: 'PowerMax Network' })
-      .setTimestamp();
+    // Regex básicos para detectar palabras exactas (evita falsos positivos como "cip" etc.)
+    const hasIpWord = /\bip\b/.test(content);
+    const hasTiendaWord = /\btienda\b/.test(content);
 
-    return message.reply({ embeds: [ipEmbed] });
-  }
+    // ───── IP / CONEXIÓN ─────
+    if (
+      hasIpWord ||
+      content === `${CONFIG.PREFIJO}ip` ||
+      content === '.ip' ||
+      content.includes('direccion') ||
+      content.includes('cómo entro') ||
+      content.includes('como entro') ||
+      content.includes('cómo me conecto') ||
+      content.includes('como me conecto') ||
+      content.includes('como entrar') ||
+      content.includes('cómo entrar')
+    ) {
+      const ipEmbed = new EmbedBuilder()
+        .setTitle('『🌐』 INFORMACIÓN DE CONEXIÓN')
+        .setColor('#00AAFF')
+        .setDescription(
+          `━━━━━━━━━━━━━━━━━━\n\n` +
+          `🌐 **JAVA EDITION**\n` +
+          `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
+          `> **Versiones:** \`${CONFIG.VERSIONS}\`\n\n` +
+          `📱 **BEDROCK EDITION**\n` +
+          `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
+          `> **Puerto:** \`${CONFIG.SERVER_PORT}\`\n\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `*Si tienes problemas para entrar, contacta con un Staff.*`
+        )
+        .setFooter({ text: 'PowerMax Network' })
+        .setTimestamp();
 
-  // ───── TIENDA ─────
-  if (
-    content === 'tienda' ||
-    content === '.tienda' ||
-    content.includes('donar') ||
-    content.includes('comprar')
-  ) {
-    const shopEmbed = new EmbedBuilder()
-      .setTitle('『🛒』 TIENDA OFICIAL')
-      .setColor('#FFCC00')
-      .setDescription(
-        `━━━━━━━━━━━━━━━━━━\n\n` +
-        `**¡Apoya al servidor comprando rangos y mejoras!**\n\n` +
-        `🔗 https://tienda.powermax.com\n\n` +
-        `━━━━━━━━━━━━━━━━━━`
-      );
-
-    return message.reply({ embeds: [shopEmbed] });
-  }
-
-  // ───── SISTEMA DE NIVELES ─────
-  const userId = message.author.id;
-  let data = nivelesDB.get(userId) || { xp: 0, nivel: 1, lastXP: 0 };
-
-  if (Date.now() - data.lastXP > 60000) {
-    data.xp += Math.floor(Math.random() * 15) + 10;
-    data.lastXP = Date.now();
-
-    const xpNecesaria = data.nivel * 250;
-
-    if (data.xp >= xpNecesaria) {
-      data.nivel++;
-      data.xp = 0;
-
-      const canalNiveles = message.guild.channels.cache.find(
-        c => c.name === CONFIG.CANALES.NIVELES
-      );
-
-      if (canalNiveles) {
-        const lvEmbed = new EmbedBuilder()
-          .setTitle('『🆙』 ¡NUEVO NIVEL!')
-          .setColor('#FFD700')
-          .setThumbnail(message.author.displayAvatarURL())
-          .setDescription(
-            `🎉 **${message.author.username}** ha subido al **Nivel ${data.nivel}**\n\n` +
-            `> Sigue participando para desbloquear recompensas.`
-          )
-          .setFooter({ text: 'PowerMax Leveling System' });
-
-        canalNiveles.send({
-          content: `🔥 ¡Felicidades ${message.author}!`,
-          embeds: [lvEmbed]
-        }).catch(() => {});
-      }
+      // Enviar al mismo canal donde se mencionó
+      await message.channel.send({ embeds: [ipEmbed] }).catch(() => {});
+      return;
     }
 
-    nivelesDB.set(userId, data);
+    // ───── TIENDA ─────
+    if (
+      hasTiendaWord ||
+      content === `${CONFIG.PREFIJO}tienda` ||
+      content === '.tienda' ||
+      content.includes('donar') ||
+      content.includes('comprar') ||
+      content.includes('shop') ||
+      content.includes('store')
+    ) {
+      const shopEmbed = new EmbedBuilder()
+        .setTitle('『🛒』 TIENDA OFICIAL')
+        .setColor('#FFCC00')
+        .setDescription(
+          `━━━━━━━━━━━━━━━━━━\n\n` +
+          `**¡Apoya al servidor comprando rangos y mejoras!**\n\n` +
+          `🔗 https://tienda.powermax.com\n\n` +
+          `━━━━━━━━━━━━━━━━━━`
+        )
+        .setFooter({ text: 'PowerMax Shop' })
+        .setTimestamp();
+
+      await message.channel.send({ embeds: [shopEmbed] }).catch(() => {});
+      return;
+    }
+
+    // ───── SISTEMA DE NIVELES ─────
+    const userId = message.author.id;
+    let data = nivelesDB.get(userId) || { xp: 0, nivel: 1, lastXP: 0 };
+
+    if (Date.now() - data.lastXP > 60000) {
+      data.xp += Math.floor(Math.random() * 15) + 10;
+      data.lastXP = Date.now();
+
+      const xpNecesaria = data.nivel * 250;
+
+      if (data.xp >= xpNecesaria) {
+        data.nivel++;
+        data.xp = 0;
+
+        const canalNiveles = message.guild.channels.cache.find(
+          c => c.name === CONFIG.CANALES.NIVELES
+        );
+
+        if (canalNiveles) {
+          const lvEmbed = new EmbedBuilder()
+            .setTitle('『🆙』 ¡NUEVO NIVEL!')
+            .setColor('#FFD700')
+            .setThumbnail(message.author.displayAvatarURL())
+            .setDescription(
+              `🎉 **${message.author.username}** ha subido al **Nivel ${data.nivel}**\n\n` +
+              `> Sigue participando para desbloquear recompensas.`
+            )
+            .setFooter({ text: 'PowerMax Leveling System' });
+
+          canalNiveles.send({
+            content: `🔥 ¡Felicidades ${message.author}!`,
+            embeds: [lvEmbed]
+          }).catch(() => {});
+        }
+      }
+
+      nivelesDB.set(userId, data);
+    }
+  } catch (err) {
+    console.error('Error en messageCreate:', err);
   }
 });
 
 /* ───────── SERVIDOR WEB ───────── */
 const app = express();
 app.get('/', (_, res) => res.send('Power Max Bot Online ✅'));
-app.listen(process.env.PORT || 10000, () => client.login(process.env.TOKEN));
+
+// Iniciar el bot y el servidor web
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Servidor web escuchando en puerto ${PORT}`);
+  client.login(process.env.TOKEN).catch(err => console.error('Error iniciando sesión en Discord:', err));
+});
