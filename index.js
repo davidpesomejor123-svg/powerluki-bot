@@ -1,7 +1,13 @@
+// index.js
+// Requisitos: Discord.js v14, megadb, express, axios
+// Uso: copiar/pegar. Asegúrate de tener TOKEN en .env y haber instalado dependencias:
+// npm i discord.js megadb express axios dotenv
+
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import express from 'express';
+import axios from 'axios';
 import {
   Client,
   GatewayIntentBits,
@@ -17,19 +23,7 @@ import {
   Collection,
   PermissionFlagsBits
 } from 'discord.js';
-
-/* ───────── CLIENT ───────── */
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildInvites,
-    GatewayIntentBits.GuildModeration
-  ],
-  partials: [Partials.Channel, Partials.Message, Partials.User]
-});
+import { crearDB } from 'megadb';
 
 /* ───────── CONFIG ───────── */
 const CONFIG = {
@@ -58,7 +52,7 @@ const CONFIG = {
   }
 };
 
-/* ───────── PERSISTENCIA ───────── */
+/* ───────── PERSISTENCIA LOCAL ───────── */
 const DATA_DIR = path.join(process.cwd(), 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
@@ -87,9 +81,28 @@ function saveJSON(filePath, data) {
 let tempBans = loadJSON(TEMPBANS_FILE, []);
 let sanctions = loadJSON(SANCTIONS_FILE, []);
 
+/* ───────── DISCORD CLIENT ───────── */
+/* Intents necesarios: MessageContent, GuildMessages, Guilds, etc. */
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildModeration
+  ],
+  partials: [Partials.Channel, Partials.Message, Partials.User]
+});
+
+/* ───────── UTILES / COLECCIONES ───────── */
 const invites = new Collection();
 const spamMap = new Map();
-const nivelesDB = new Map();
+// cooldown map para XP: key = userId (puedes usar guildId:userId si quieres por servidor)
+const xpCooldown = new Map();
+// megadb persistente para niveles (no se pierde)
+const nivelesDB = new crearDB('niveles'); // persistente en megadb
+// otros mapas para manejo de tiempoouts, tickets, etc.
 const activeUnbanTimeouts = new Map();
 const ticketInactivityTimers = new Map();
 
@@ -97,202 +110,242 @@ const ticketInactivityTimers = new Map();
 function isStaffMember(member) {
   if (!member || !member.roles) return false;
   const STAFF_ROLE_NAMES = ['Staff', 'Admin', 'Mod', 'Co-Owner', 'Owner', 'Helper'];
-  return member.roles.cache.some(r => STAFF_ROLE_NAMES.includes(r.name)) || member.permissions.has(PermissionFlagsBits.Administrator);
+  return member.roles.cache.some(r => STAFF_ROLE_NAMES.includes(r.name));
 }
 
-/* ───────── READY ───────── */
-client.once('ready', async () => {
-  console.log(`✅ Power Max Network ONLINE: ${client.user.tag}`);
+function savePersistentFiles() {
+  saveJSON(TEMPBANS_FILE, tempBans);
+  saveJSON(SANCTIONS_FILE, sanctions);
+}
 
-  client.guilds.cache.forEach(async (guild) => {
-    try {
-      const commands = [
-        {
-          name: 'anuncio',
-          description: 'Enviar anuncio al canal de anuncios (Staff)',
-          options: [
-            { name: 'texto', description: 'Contenido del anuncio', type: 3, required: true },
-            { name: 'image1', description: 'Imagen (opcional)', type: 11, required: false }
-          ]
-        },
-        {
-          name: 'nuevo',
-          description: 'Publicar novedad (Staff)',
-          options: [
-            { name: 'texto', description: 'Contenido', type: 3, required: true },
-            { name: 'image1', description: 'Imagen (opcional)', type: 11, required: false }
-          ]
-        }
-      ];
-      await guild.commands.set(commands);
-    } catch (err) {
-      console.error('Error creando comandos', err);
-    }
-  });
+/* ───────── KEEP-ALIVE (EXPRESS + PING) ───────── */
+const app = express();
+const PORT = process.env.PORT_KEEPALIVE ? Number(process.env.PORT_KEEPALIVE) : 10000;
+
+// simple route
+app.get('/', (req, res) => {
+  res.send('Bot activo correctamente.'); // para comprobar desde navegador
 });
 
-/* ───────── INTERACTIONS ───────── */
-client.on('interactionCreate', async (interaction) => {
-  if (interaction.isChatInputCommand()) {
-    const { commandName } = interaction;
-
-    if (commandName === 'anuncio' || commandName === 'nuevo') {
-      if (!isStaffMember(interaction.member)) return interaction.reply({ content: '❌ No tienes permisos.', ephemeral: true });
-
-      const mainGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
-      if (!mainGuild) return interaction.reply({ content: '❌ Error: No se detecta el servidor principal.', ephemeral: true });
-
-      const canalNombre = commandName === 'anuncio' ? CONFIG.CANALES.ANUNCIOS : CONFIG.CANALES.NUEVO;
-      const canal = mainGuild.channels.cache.find(c => c.name === canalNombre);
-
-      if (!canal) return interaction.reply({ content: `❌ No encontré el canal ${canalNombre}`, ephemeral: true });
-
-      const texto = interaction.options.getString('texto', true);
-      const att1 = interaction.options.getAttachment('image1');
-
-      const embed = new EmbedBuilder()
-        .setTitle(commandName === 'anuncio' ? '『📣』ANUNCIO OFICIAL' : '『🎊』NUEVA NOVEDAD')
-        .setDescription(`\n---\n${texto}\n---\n`)
-        .setColor(commandName === 'anuncio' ? '#0099ff' : '#00ffaa')
-        .setFooter({ text: `Publicado por ${interaction.user.username} | PowerMax` })
-        .setTimestamp();
-
-      const files = att1 ? [{ attachment: att1.url, name: att1.name }] : [];
-
-      await canal.send({ content: '||@everyone||', embeds: [embed], files });
-      return interaction.reply({ content: '✅ Publicado con éxito.', ephemeral: true });
-    }
-  }
-
-  if (interaction.isButton() && interaction.customId === 'ticket_close') {
-    await interaction.reply({ content: '🔒 Cerrando en 5 segundos...', ephemeral: true });
-    setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
-  }
+app.listen(PORT, () => {
+  console.log(`🌐 Keep-alive server escuchando en puerto ${PORT}`);
 });
 
-/* ───────── MENSAJES: IP, TIENDA Y NIVELES (COMPLETO) ───────── */
-client.on('messageCreate', async (message) => {
+// Ping a la URL del bot cada 5 minutos para evitar suspensión.
+// Puedes definir KEEPALIVE_URL en .env si quieres que sea una URL pública (p.ej. https://<project>.onrender.com/)
+const KEEPALIVE_URL = process.env.KEEPALIVE_URL || `http://localhost:${PORT}/`;
+
+setInterval(async () => {
   try {
-    if (message.author.bot || !message.guild) return;
+    await axios.get(KEEPALIVE_URL);
+    console.log('🔁 Ping Keep-Alive enviado a:', KEEPALIVE_URL);
+  } catch (err) {
+    console.error('❌ Error en ping Keep-Alive:', err?.message ?? err);
+  }
+}, 5 * 60 * 1000);
 
-    const raw = message.content || '';
-    const content = raw.toLowerCase().trim();
-
-    // Regex básicos para detectar palabras exactas (evita falsos positivos como "cip" etc.)
-    const hasIpWord = /\bip\b/.test(content);
-    const hasTiendaWord = /\btienda\b/.test(content);
-
-    // ───── IP / CONEXIÓN ─────
-    if (
-      hasIpWord ||
-      content === `${CONFIG.PREFIJO}ip` ||
-      content === '.ip' ||
-      content.includes('direccion') ||
-      content.includes('cómo entro') ||
-      content.includes('como entro') ||
-      content.includes('cómo me conecto') ||
-      content.includes('como me conecto') ||
-      content.includes('como entrar') ||
-      content.includes('cómo entrar')
-    ) {
-      const ipEmbed = new EmbedBuilder()
-        .setTitle('『🌐』 INFORMACIÓN DE CONEXIÓN')
-        .setColor('#00AAFF')
-        .setDescription(
-          `━━━━━━━━━━━━━━━━━━\n\n` +
-          `🌐 **JAVA EDITION**\n` +
-          `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
-          `> **Versiones:** \`${CONFIG.VERSIONS}\`\n\n` +
-          `📱 **BEDROCK EDITION**\n` +
-          `> **IP:** \`${CONFIG.SERVER_IP}\`\n` +
-          `> **Puerto:** \`${CONFIG.SERVER_PORT}\`\n\n` +
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `*Si tienes problemas para entrar, contacta con un Staff.*`
-        )
-        .setFooter({ text: 'PowerMax Network' })
-        .setTimestamp();
-
-      // Enviar al mismo canal donde se mencionó
-      await message.channel.send({ embeds: [ipEmbed] }).catch(() => {});
-      return;
-    }
-
-    // ───── TIENDA ─────
-    if (
-      hasTiendaWord ||
-      content === `${CONFIG.PREFIJO}tienda` ||
-      content === '.tienda' ||
-      content.includes('donar') ||
-      content.includes('comprar') ||
-      content.includes('shop') ||
-      content.includes('store')
-    ) {
-      const shopEmbed = new EmbedBuilder()
-        .setTitle('『🛒』 TIENDA OFICIAL')
-        .setColor('#FFCC00')
-        .setDescription(
-          `━━━━━━━━━━━━━━━━━━\n\n` +
-          `**¡Apoya al servidor comprando rangos y mejoras!**\n\n` +
-          `🔗 https://tienda.powermax.com\n\n` +
-          `━━━━━━━━━━━━━━━━━━`
-        )
-        .setFooter({ text: 'PowerMax Shop' })
-        .setTimestamp();
-
-      await message.channel.send({ embeds: [shopEmbed] }).catch(() => {});
-      return;
-    }
-
-    // ───── SISTEMA DE NIVELES ─────
-    const userId = message.author.id;
-    let data = nivelesDB.get(userId) || { xp: 0, nivel: 1, lastXP: 0 };
-
-    if (Date.now() - data.lastXP > 60000) {
-      data.xp += Math.floor(Math.random() * 15) + 10;
-      data.lastXP = Date.now();
-
-      const xpNecesaria = data.nivel * 250;
-
-      if (data.xp >= xpNecesaria) {
-        data.nivel++;
-        data.xp = 0;
-
-        const canalNiveles = message.guild.channels.cache.find(
-          c => c.name === CONFIG.CANALES.NIVELES
-        );
-
-        if (canalNiveles) {
-          const lvEmbed = new EmbedBuilder()
-            .setTitle('『🆙』 ¡NUEVO NIVEL!')
-            .setColor('#FFD700')
-            .setThumbnail(message.author.displayAvatarURL())
-            .setDescription(
-              `🎉 **${message.author.username}** ha subido al **Nivel ${data.nivel}**\n\n` +
-              `> Sigue participando para desbloquear recompensas.`
-            )
-            .setFooter({ text: 'PowerMax Leveling System' });
-
-          canalNiveles.send({
-            content: `🔥 ¡Felicidades ${message.author}!`,
-            embeds: [lvEmbed]
-          }).catch(() => {});
-        }
-      }
-
-      nivelesDB.set(userId, data);
+/* ───────── EVENTOS BÁSICOS ───────── */
+client.once('ready', async () => {
+  console.log(`✅ Bot listo: ${client.user.tag}`);
+  // crear DB si no existe (megadb crea automaticamente, pero podemos asegurarlo)
+  try {
+    if (!await nivelesDB.tiene('__init__')) {
+      // solo una marca vacía, opcional
+      await nivelesDB.establecer('__init__', true);
     }
   } catch (err) {
-    console.error('Error en messageCreate:', err);
+    // si megadb está en inglés (has/set/get) intentaremos en fallback
+    try {
+      if (!await nivelesDB.has('__init__')) {
+        await nivelesDB.set('__init__', true);
+      }
+    } catch (e) {
+      console.warn('⚠️ No se pudo inicializar nivelesDB (megadb). Asegúrate de tener megadb configurado.', e?.message ?? e);
+    }
   }
 });
 
-/* ───────── SERVIDOR WEB ───────── */
-const app = express();
-app.get('/', (_, res) => res.send('Power Max Bot Online ✅'));
+/* ───────── MESSAGE CREATE (PRIORIDAD: !ip / !tienda) ───────── */
+client.on('messageCreate', async (message) => {
+  try {
+    // 1) filtros básicos
+    if (!message || !message.guild) return;
+    if (message.author?.bot) return;
 
-// Iniciar el bot y el servidor web
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Servidor web escuchando en puerto ${PORT}`);
-  client.login(process.env.TOKEN).catch(err => console.error('Error iniciando sesión en Discord:', err));
+    const raw = String(message.content || '').trim();
+    if (!raw) return;
+    const content = raw.toLowerCase();
+
+    // Extraer comando / palabra (aceptar "!ip", "ip", "!tienda", "tienda", y variantes)
+    const firstToken = raw.split(/\s+/)[0].toLowerCase();
+    const normalized = firstToken.startsWith(CONFIG.PREFIJO) ? firstToken.slice(CONFIG.PREFIJO.length) : firstToken;
+
+    // ─────────────────────────────────────────────────────────────────
+    // PRIORIDAD MÁXIMA: !ip / ip  (respuesta inmediata y return)
+    // ─────────────────────────────────────────────────────────────────
+    if (normalized === 'ip') {
+      // Respuesta compacta y rápida
+      await message.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('🌐 IP DEL SERVIDOR')
+            .setDescription(
+              `**Java:** \`${CONFIG.SERVER_IP}\` (${CONFIG.VERSIONS})\n` +
+              `**Bedrock:** \`${CONFIG.SERVER_IP}\` (Puerto: \`${CONFIG.SERVER_PORT}\`)\n\n` +
+              `**Tienda:** https://tienda.powermax.com`
+            )
+            .setColor(0x00AE86)
+            .setTimestamp()
+        ]
+      });
+      return; // IMPORTANTE: return inmediato para evitar trabajo extra
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // PRIORIDAD MÁXIMA: !tienda / tienda  (respuesta inmediata y return)
+    // ─────────────────────────────────────────────────────────────────
+    if (normalized === 'tienda' || normalized === 'shop' || content.includes('https://tienda.powermax.com')) {
+      await message.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('🛒 TIENDA OFICIAL')
+            .setDescription('Visita la tienda oficial del servidor:\nhttps://tienda.powermax.com')
+            .setURL('https://tienda.powermax.com')
+            .setColor(0xFFD166)
+            .setTimestamp()
+        ]
+      });
+      return; // IMPORTANTE: salida inmediata
+    }
+
+    // Si llegamos aquí, NO era un comando ip/tienda; podemos continuar a tareas ligeras.
+
+    // ─────────────────────────────────────────────────────────────────
+    // SISTEMA DE NIVELES (persistente con megadb) - cooldown 1 minuto por usuario
+    // Debe ir después de los checks de comandos prioritarios
+    // ─────────────────────────────────────────────────────────────────
+    const userId = message.author.id;
+
+    // cooldown por usuario (1 minuto)
+    const COOLDOWN_MS = 60 * 1000;
+    const last = xpCooldown.get(userId) || 0;
+    const now = Date.now();
+
+    if (now - last < COOLDOWN_MS) {
+      // Si está en cooldown, no otorgamos XP — simplemente salimos (no es necesario enviar nada)
+      return;
+    }
+    xpCooldown.set(userId, now);
+
+    // Obtenemos/creamos datos del usuario en megadb
+    let perfil = null;
+    try {
+      // Intentamos usar métodos en español de megadb: tiene / obtener / establecer
+      if (await nivelesDB.tiene(userId)) {
+        perfil = await nivelesDB.obtener(userId);
+      } else {
+        perfil = { xp: 0, nivel: 1 };
+        await nivelesDB.establecer(userId, perfil);
+      }
+    } catch (err) {
+      // fallback si la API usa métodos en inglés (has/get/set)
+      try {
+        if (await nivelesDB.has(userId)) {
+          perfil = await nivelesDB.get(userId);
+        } else {
+          perfil = { xp: 0, nivel: 1 };
+          await nivelesDB.set(userId, perfil);
+        }
+      } catch (e) {
+        console.error('❌ Error accediendo a megadb (niveles):', e?.message ?? e);
+        // Como fallback temporal, no rompemos el bot: usamos un Map in-memory (no persistente)
+        if (!global._niveles_memory) global._niveles_memory = new Map();
+        if (global._niveles_memory.has(userId)) {
+          perfil = global._niveles_memory.get(userId);
+        } else {
+          perfil = { xp: 0, nivel: 1 };
+          global._niveles_memory.set(userId, perfil);
+        }
+      }
+    }
+
+    // Otorgar XP aleatoria
+    const xpGanada = Math.floor(Math.random() * 10) + 5; // 5-14 XP por mensaje (ajustable)
+    perfil.xp = (perfil.xp || 0) + xpGanada;
+    const xpNecesaria = (perfil.nivel || 1) * 100;
+
+    if (perfil.xp >= xpNecesaria) {
+      perfil.nivel = (perfil.nivel || 1) + 1;
+      perfil.xp = perfil.xp - xpNecesaria;
+
+      // Enviar anuncio de subida de nivel en canal general o canal de niveles si existe
+      try {
+        const canalNombre = CONFIG.CANALES.NIVELES;
+        const canal = message.guild.channels.cache.find(c => c.name === canalNombre && c.isTextBased());
+        const destino = canal || message.channel;
+        await destino.send({
+          content: `🎉 **${message.author.username}** ha subido al nivel **${perfil.nivel}**!`
+        });
+      } catch (err) {
+        // Si falla el envío, mostrar en el mismo canal
+        try { await message.channel.send(`🎉 **${message.author.username}** ha subido al nivel **${perfil.nivel}**!`); } catch (e) { /* ignore */ }
+      }
+    }
+
+    // Guardar en megadb (usar español o fallback inglés)
+    try {
+      await nivelesDB.establecer(userId, perfil);
+    } catch (err) {
+      try {
+        await nivelesDB.set(userId, perfil);
+      } catch (e) {
+        // fallback in-memory
+        if (!global._niveles_memory) global._niveles_memory = new Map();
+        global._niveles_memory.set(userId, perfil);
+      }
+    }
+
+    // FIN del flow principal del messageCreate
+
+  } catch (error) {
+    // Capturamos errores inesperados para evitar que el bot deje de procesar mensajes
+    console.error('❌ Error en messageCreate:', error?.stack ?? error);
+  }
 });
+
+/* ───────── MISC: HANDLES Y GUARDADO PERIÓDICO ───────── */
+// Guardar archivos JSON de persistencia de vez en cuando (por si se modifican)
+setInterval(() => {
+  try {
+    savePersistentFiles();
+  } catch (err) {
+    console.error('Error guardando persistencia local:', err);
+  }
+}, 60 * 1000); // cada minuto
+
+// Manejo básico de errores no atrapados
+process.on('unhandledRejection', (reason, p) => {
+  console.error('Unhandled Rejection at: Promise', p, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+  // No cerramos automáticamente para que el hosting pueda reiniciar si es necesario.
+});
+
+/* ───────── LOGIN ───────── */
+(async () => {
+  try {
+    const token = process.env.TOKEN;
+    if (!token) {
+      console.error('❌ TOKEN no encontrado en .env (process.env.TOKEN). Coloca tu token y reinicia.');
+      process.exit(1);
+    }
+    await client.login(token);
+    console.log('🔐 Intentando iniciar sesión en Discord...');
+  } catch (err) {
+    console.error('❌ Error al loguear el bot:', err);
+    process.exit(1);
+  }
+})();
+
