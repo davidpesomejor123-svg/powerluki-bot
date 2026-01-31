@@ -8,8 +8,7 @@ import {
   Client,
   GatewayIntentBits,
   Partials,
-  EmbedBuilder,
-  Collection
+  EmbedBuilder
 } from 'discord.js';
 
 /* ───────── CONFIG ───────── */
@@ -33,10 +32,10 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message]
 });
 
-/* ───────── BASE DE DATOS SIMPLE (LA TUYA) ───────── */
+/* ───────── SISTEMA DE NIVELES (EL TUYO) ───────── */
 const nivelesDB = new Map();
 
-/* ───────── BOT READY ───────── */
+/* ───────── READY ───────── */
 client.once('ready', () => {
   console.log(`🤖 Bot conectado como ${client.user.tag}`);
 });
@@ -51,24 +50,23 @@ client.on('messageCreate', async (message) => {
     /* ───── IP ───── */
     if (
       content === '!ip' ||
-      content === 'ip' ||
-      content.includes('server ip')
+      content === 'ip'
     ) {
       const ipEmbed = new EmbedBuilder()
-        .setTitle('『🌐』 IP DEL SERVIDOR')
+        .setTitle('<:ip:ID> IP DEL SERVIDOR')
         .setColor('#00FFFF')
         .setDescription(
           `━━━━━━━━━━━━━━━━━━\n\n` +
-          `🟢 **Java:** \`${CONFIG.SERVER_IP}\`\n` +
-          `🟣 **Bedrock:** \`${CONFIG.SERVER_IP}\`\n` +
-          `📌 **Puerto:** \`${CONFIG.SERVER_PORT}\`\n` +
-          `📦 **Versiones:** ${CONFIG.VERSIONS}\n\n` +
+          `<:java:ID> **Java:** \`${CONFIG.SERVER_IP}\`\n` +
+          `<:bedrock:ID> **Bedrock:** \`${CONFIG.SERVER_IP}\`\n` +
+          `<:minecraft_gold_cash:ID> **Puerto:** \`${CONFIG.SERVER_PORT}\`\n` +
+          `<:minecraft_gold_one:ID> **Versiones:** ${CONFIG.VERSIONS}\n\n` +
+          `<:TwoToneShield_IDS:ID> Servidor seguro y estable\n\n` +
           `━━━━━━━━━━━━━━━━━━`
         )
-        .setFooter({ text: 'PowerMax Network' })
+        .setFooter({ text: 'PowerMax Network • Conéctate ya <:MinecraftHeart:ID>' })
         .setTimestamp();
 
-      // Enviar al mismo canal donde se mencionó
       message.channel.send({ embeds: [ipEmbed] }).catch(() => {});
       return;
     }
@@ -83,15 +81,17 @@ client.on('messageCreate', async (message) => {
       content.includes('store')
     ) {
       const shopEmbed = new EmbedBuilder()
-        .setTitle('『🛒』 TIENDA OFICIAL')
+        .setTitle('<:Tienda:ID> TIENDA OFICIAL')
         .setColor('#FFCC00')
         .setDescription(
           `━━━━━━━━━━━━━━━━━━\n\n` +
-          `**¡Apoya al servidor comprando rangos y mejoras!**\n\n` +
-          `🔗 https://tienda.powermax.com\n\n` +
+          `<:Minecoins:ID> **¡Apoya al servidor comprando rangos y mejoras!**\n\n` +
+          `<:emoji_49:ID> Compra segura y verificada\n` +
+          `<:minecraft_gold_cash:ID> Pagos rápidos\n\n` +
+          `🔗 **https://tienda.powermax.com**\n\n` +
           `━━━━━━━━━━━━━━━━━━`
         )
-        .setFooter({ text: 'PowerMax Shop' })
+        .setFooter({ text: 'PowerMax Shop • Gracias por apoyar <:fatchicken:ID>' })
         .setTimestamp();
 
       message.channel.send({ embeds: [shopEmbed] }).catch(() => {});
@@ -118,17 +118,17 @@ client.on('messageCreate', async (message) => {
 
         if (canalNiveles) {
           const lvEmbed = new EmbedBuilder()
-            .setTitle('『🆙』 ¡NUEVO NIVEL!')
+            .setTitle('<:minecraft_gold_one:ID> ¡NUEVO NIVEL!')
             .setColor('#FFD700')
             .setThumbnail(message.author.displayAvatarURL())
             .setDescription(
-              `🎉 **${message.author.username}** ha subido al **Nivel ${data.nivel}**\n\n` +
-              `> Sigue participando para desbloquear recompensas.`
+              `<:gigachad:ID> **${message.author.username}** ha subido al **Nivel ${data.nivel}**\n\n` +
+              `<:MinecraftHeart:ID> Sigue participando para ganar más recompensas`
             )
             .setFooter({ text: 'PowerMax Leveling System' });
 
           canalNiveles.send({
-            content: `🔥 ¡Felicidades ${message.author}!`,
+            content: `<:sigma:ID> ¡Felicidades ${message.author}!`,
             embeds: [lvEmbed]
           }).catch(() => {});
         }
