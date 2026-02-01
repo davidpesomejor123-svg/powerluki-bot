@@ -1,4 +1,4 @@
-// index.js  (versión revisada y lista para Render)
+// index.js — Power Luki Network Bot (MERGED & CLEAN)
 // Requiere: node 18+, discord.js v14, express, dotenv
 import 'dotenv/config';
 import express from 'express';
@@ -64,8 +64,8 @@ const client = new Client({
 
 /* ───────── MEMORIA (temporal) ───────── */
 const nivelesDB = new Map();
-const openTickets = new Map(); // userId -> channelId
-const suggestionsDB = new Map(); // id -> { id, author, texto, messageId, channelId, status, createdAt }
+const openTickets = new Map();
+const suggestionsDB = new Map();
 let suggestionCounter = 1;
 
 /* ───────── HELPERS ───────── */
@@ -78,7 +78,8 @@ async function ensureMutedRole(guild) {
   if (!guild) return null;
   let muted = guild.roles.cache.find(r => r.name === 'Muted');
   if (muted) return muted;
-  muted = await guild.roles.create({ name: 'Muted', reason: 'Rol para silenciar usuarios', permissions: [] });
+  muted = await guild.roles.create({ name: 'Muted', reason: 'Rol para silenciar usuarios', permissions: [] }).catch(() => null);
+  if (!muted) return null;
   guild.channels.cache.forEach(channel => {
     if (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildForum) {
       channel.permissionOverwrites.edit(muted, { SendMessages: false, AddReactions: false, Speak: false }).catch(() => {});
@@ -139,7 +140,6 @@ client.once('ready', async () => {
       }
       if (!panelChannel) return;
 
-      // buscar si ya existe mensaje con título "Centro de Soporte"
       const fetched = await panelChannel.messages.fetch({ limit: 50 }).catch(() => null);
       const existe = fetched && fetched.find(m => m.author?.id === client.user.id && m.embeds?.length && m.embeds[0].title?.includes('Centro de Soporte'));
       if (!existe) {
@@ -166,7 +166,7 @@ client.once('ready', async () => {
 /* ───────── INTERACTIONS (slashes / buttons / modals) ───────── */
 client.on('interactionCreate', async (interaction) => {
   try {
-    if (interaction.isChatInputCommand()) {
+    if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
       const name = interaction.commandName;
 
       /* /ticket */
@@ -260,9 +260,10 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ content: 'Tu sugerencia fue enviada al staff para valoración.', ephemeral: true });
       }
 
-      /* /nuevo /anuncio - envía al servidor principal */
+      /* /nuevo /anuncio - envia al servidor principal (staff) */
       if (name === 'nuevo' || name === 'anuncio') {
-        if (!interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff puede usar esto.', ephemeral: true });
+        const memberRoles = interaction.member?.roles?.cache;
+        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff puede usar esto.', ephemeral: true });
         const contenido = interaction.options.getString('mensaje');
         const targetGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
         if (!targetGuild) return interaction.reply({ content: 'No se encontró el servidor principal.', ephemeral: true });
@@ -275,9 +276,10 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ content: 'Mensaje enviado al servidor principal.', ephemeral: true });
       }
 
-      /* Mute / Unmute / Ban / Temban */
+      /* mute / unmute / ban / temban (staff) */
       if (name === 'mute') {
-        if (!interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
+        const memberRoles = interaction.member?.roles?.cache;
+        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
         const usuario = interaction.options.getUser('usuario');
         const duracion = interaction.options.getString('duracion');
         const guild = interaction.guild;
@@ -305,7 +307,8 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (name === 'unmute') {
-        if (!interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
+        const memberRoles = interaction.member?.roles?.cache;
+        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
         const usuario = interaction.options.getUser('usuario'); const guild = interaction.guild;
         const member = await guild.members.fetch(usuario.id).catch(() => null);
         const muted = guild.roles.cache.find(r => r.name === 'Muted');
@@ -318,7 +321,8 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (name === 'ban' || name === 'temban') {
-        if (!interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
+        const memberRoles = interaction.member?.roles?.cache;
+        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
         const usuario = interaction.options.getUser('usuario'); const razon = interaction.options.getString('razon') || 'No especificada'; const guild = interaction.guild;
         await guild.bans.create(usuario.id, { reason: `${razon} - por ${interaction.user.tag}` }).catch(() => { });
         const ch = findChannelByName(guild, CONFIG.CANALES.BANEOS);
@@ -333,7 +337,8 @@ client.on('interactionCreate', async (interaction) => {
 
       /* /encuesta (staff) */
       if (name === 'encuesta') {
-        if (!interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff.', ephemeral: true });
+        const memberRoles = interaction.member?.roles?.cache;
+        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff.', ephemeral: true });
         const pregunta = interaction.options.getString('pregunta');
         const embed = new EmbedBuilder().setTitle('📊 Nueva encuesta').setDescription(pregunta).setFooter({ text: 'Power Lucky Network' }).setTimestamp();
         const reply = await interaction.reply({ embeds: [embed], fetchReply: true });
@@ -343,7 +348,7 @@ client.on('interactionCreate', async (interaction) => {
     } // end isChatInputCommand
 
     // Buttons
-    if (interaction.isButton()) {
+    if (interaction.isButton && interaction.isButton()) {
       const id = interaction.customId;
 
       // Panel buttons -> abrir ticket
@@ -386,13 +391,13 @@ client.on('interactionCreate', async (interaction) => {
 
       // Staff: valoración obligatoria (desde canal staff)
       if (id.startsWith('staff_accept_') || id.startsWith('staff_deny_')) {
-        if (!interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff puede valorar.', ephemeral: true });
+        const memberRoles = interaction.member?.roles?.cache;
+        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff puede valorar.', ephemeral: true });
         const modal = new ModalBuilder().setCustomId(`${id}_modal`).setTitle(id.startsWith('staff_accept_') ? 'Razón de aprobación' : 'Razón de denegación');
         modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Razón (opcional)').setStyle(TextInputStyle.Paragraph).setRequired(false)));
         await interaction.showModal(modal);
         return;
       }
-
     } // end buttons
 
     // Modal submit (staff reason)
@@ -525,8 +530,6 @@ const app = express();
 app.get('/', (_, res) => res.send('Power Max Bot Online ✅'));
 
 /* ───────── ARRANQUE SEGURO Y CORRECTO ───────── */
-
-// Evita crashes silenciosos
 process.on('unhandledRejection', err => {
   console.error('Unhandled Rejection:', err);
 });
@@ -534,21 +537,17 @@ process.on('uncaughtException', err => {
   console.error('Uncaught Exception:', err);
 });
 
-// Verificar TOKEN (sin imprimirlo)
 if (!process.env.TOKEN) {
   console.error('❌ ERROR: TOKEN no definido en Render (Environment Variables)');
 } else {
   console.log('✅ TOKEN detectado correctamente');
 }
 
-// 1️⃣ Conectar el BOT A DISCORD (NO depende de Express)
 client.login(process.env.TOKEN)
   .then(() => console.log('🔐 Login a Discord iniciado'))
   .catch(err => console.error('❌ Error al iniciar sesión en Discord:', err));
 
-// 2️⃣ Servidor web SOLO para Render (health check)
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Servidor de salud activo en puerto ${PORT}`);
 });
-
