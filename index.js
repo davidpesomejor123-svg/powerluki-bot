@@ -524,20 +524,31 @@ client.on('guildMemberRemove', async member => {
 const app = express();
 app.get('/', (_, res) => res.send('Power Max Bot Online ✅'));
 
-/* ───────── ARRANQUE SEGURO (TOKEN + LOGIN + SERVER) ───────── */
-process.on('unhandledRejection', (reason) => { console.error('Unhandled Rejection:', reason); });
-process.on('uncaughtException', (err) => { console.error('Uncaught Exception:', err); });
+/* ───────── ARRANQUE SEGURO Y CORRECTO ───────── */
 
-// LOG token presence (no imprimir token).
-console.log('TOKEN detectado:', !!process.env.TOKEN);
+// Evita crashes silenciosos
+process.on('unhandledRejection', err => {
+  console.error('Unhandled Rejection:', err);
+});
+process.on('uncaughtException', err => {
+  console.error('Uncaught Exception:', err);
+});
 
-// LOGIN DEL BOT (FUERA DEL app.listen)
+// Verificar TOKEN (sin imprimirlo)
+if (!process.env.TOKEN) {
+  console.error('❌ ERROR: TOKEN no definido en Render (Environment Variables)');
+} else {
+  console.log('✅ TOKEN detectado correctamente');
+}
+
+// 1️⃣ Conectar el BOT A DISCORD (NO depende de Express)
 client.login(process.env.TOKEN)
   .then(() => console.log('🔐 Login a Discord iniciado'))
-  .catch(err => console.error('❌ Error iniciando sesión en Discord:', err));
+  .catch(err => console.error('❌ Error al iniciar sesión en Discord:', err));
 
-// INICIAR EL SERVIDOR WEB
+// 2️⃣ Servidor web SOLO para Render (health check)
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🌐 Servidor web escuchando en puerto ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🌐 Servidor de salud activo en puerto ${PORT}`);
 });
+
