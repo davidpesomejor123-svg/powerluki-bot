@@ -517,16 +517,20 @@ client.on('guildMemberRemove', async member => {
 const app = express();
 app.get('/', (_, res) => res.send('Power Max Bot Online ✅'));
 
-/* ───────── INICIAR BOT (arranque robusto) ───────── */
-process.on('unhandledRejection', (reason, p) => { console.error('Unhandled Rejection:', reason); });
-process.on('uncaughtException', (err) => { console.error('Uncaught Exception:', err); });
+// ───────── ARRANQUE SEGURO ─────────
+if (!process.env.TOKEN) {
+  console.error('❌ FALTA TOKEN en Render (Environment Variable TOKEN)');
+} else {
+  console.log('✅ TOKEN detectado correctamente');
+}
 
+// LOGIN DEL BOT (SIEMPRE FUERA)
+client.login(process.env.TOKEN)
+  .then(() => console.log('🔐 Login a Discord iniciado'))
+  .catch(err => console.error('❌ Error iniciando sesión en Discord:', err));
+
+// SERVIDOR WEB
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🌐 Servidor web escuchando en puerto ${PORT}`);
-  if (!process.env.TOKEN) {
-    console.error('FALTA TOKEN en .env -> crea un archivo .env con TOKEN=tu_token_aqui');
-    return;
-  }
-  client.login(process.env.TOKEN).catch(err => console.error('Error iniciando sesión en Discord:', err));
 });
