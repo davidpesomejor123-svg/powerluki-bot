@@ -692,12 +692,19 @@ const PORT = process.env.PORT || 3000;
 app.get('/', (_, res) => res.send('✅ Power Luki Bot activo'));
 app.listen(PORT, () => console.log(`🌐 Web server escuchando en ${PORT}`));
 
-/* ───────── LOGIN ───────── */
-if (!process.env.TOKEN) {
-  console.error('❌ ERROR: falta TOKEN en .env');
-  process.exit(1);
+/* ----------------- LOGIN CON DEBUG AVANZADO ----------------- */
+const token = process.env.TOKEN;
+
+if (!token) {
+    console.error('❌ ERROR CRÍTICO: El Token es undefined. Revisa la pestaña Environment en Render.');
+} else {
+    console.log(`📡 Intentando conectar con token (longitud: ${token.length} caracteres)...`);
+    
+    client.login(token)
+        .then(() => console.log('✅ client.login() exitoso: Petición enviada a Discord.'))
+        .catch(err => {
+            console.error('❌ FALLO EL LOGIN:');
+            console.error('Mensaje:', err.message);
+            console.error('Código:', err.code);
+        });
 }
-client.login(process.env.TOKEN).catch(err => {
-  console.error('❌ Error al loguear bot:', err);
-  process.exit(1);
-});
