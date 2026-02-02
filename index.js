@@ -191,7 +191,7 @@ client.once('ready', async () => {
     const commands = [
       new SlashCommandBuilder().setName('mute').setDescription('Silenciar un usuario').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('duracion')),
       new SlashCommandBuilder().setName('unmute').setDescription('Des-silenciar').addUserOption(o => o.setName('usuario').setRequired(true)),
-      new SlashCommandBuilder().setName('ban').setDescription('Banear usuario').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('razon')),
+      new SlashCommandBuilder().setName('ban').setDescription('Banear usuario').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('razon').setDescription('Razón')),
       new SlashCommandBuilder().setName('temban').setDescription('Ban temporal').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('tiempo').setRequired(true)).addStringOption(o => o.setName('razon')),
       new SlashCommandBuilder().setName('warn').setDescription('Advertir a un usuario').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('razon').setRequired(true)),
       new SlashCommandBuilder().setName('status').setDescription('Estado del servidor'),
