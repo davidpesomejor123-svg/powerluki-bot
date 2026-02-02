@@ -1,4 +1,4 @@
-// index.js — Power Luki Network Bot (MERGED & CLEAN)
+// index.js — Power Luki Network Bot (FIXED & READY)
 // Requiere: node 18+, discord.js v14, express, dotenv
 import 'dotenv/config';
 import express from 'express';
@@ -21,7 +21,8 @@ import {
   Routes
 } from 'discord.js';
 
-/* ───────── CONFIG ───────── */
+/* ───────── CONFIGURACIÓN ───────── */
+// ¡IMPORTANTE! Cambia los IDs por los de tu servidor real si son diferentes
 const CONFIG = {
   PREFIJO: '!',
   SERVER_IP: 'powermax.hidenmc.com',
@@ -41,25 +42,28 @@ const CONFIG = {
     VALORACIONES: '💪valoraciones',
     STAFF_REVIEW: 'valoracion-staff'
   },
-  MAIN_GUILD_ID: '1340442398442127480',
+  // REEMPLAZA ESTOS IDs CON LOS DE TU SERVIDOR
+  MAIN_GUILD_ID: '1340442398442127480', 
   STAFF_ROLE_ID: '1458243569075884219',
   EMOJIS: {
-    TIENDA: '<:Tienda:ID>',
-    IP: '<:ip:ID>',
-    JAVA: '<:java:ID>',
-    BEDROCK: '<:bedrock:ID>',
+    TIENDA: '🛒', // Si no tienes ID, usa un emoji normal temporalmente
+    IP: '🌐',
+    JAVA: '☕',
+    BEDROCK: '🪨',
   }
 };
 
-/* ───────── CLIENT ───────── */
+/* ───────── CLIENTE DISCORD ───────── */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildPresences
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.Reaction]
 });
 
 /* ───────── MEMORIA (temporal) ───────── */
@@ -68,7 +72,7 @@ const openTickets = new Map();
 const suggestionsDB = new Map();
 let suggestionCounter = 1;
 
-/* ───────── HELPERS ───────── */
+/* ───────── FUNCIONES DE AYUDA ───────── */
 function findChannelByName(guild, name) {
   if (!guild) return null;
   return guild.channels.cache.find(c => c.name === name);
@@ -103,10 +107,11 @@ function formatTimestamp(date = new Date()) {
   return date.toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa' });
 }
 
-/* ───────── READY: registrar comandos y publicar panel de tickets ───────── */
+/* ───────── READY: INICIO DEL BOT ───────── */
 client.once('ready', async () => {
   try {
     console.log(`🤖 Bot conectado como ${client.user.tag}`);
+    client.user.setActivity('Power Luki Network', { type: 4 }); // Estado personalizado
 
     // Registrar comandos slash (global)
     try {
@@ -125,94 +130,102 @@ client.once('ready', async () => {
 
       const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
       await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-      console.log('Slash commands registrados.');
+      console.log('✅ Slash commands registrados exitosamente.');
     } catch (err) {
-      console.error('Error registrando comandos:', err);
+      console.error('❌ Error registrando comandos:', err);
     }
 
-    // Publicar panel de tickets en canal TICKETS_LOG si no existe
+    // Publicar panel de tickets
     try {
-      const guild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID) || client.guilds.cache.values().next().value;
-      if (!guild) return;
+      const guild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID) || client.guilds.cache.first();
+      if (!guild) {
+        console.log("⚠️ No se encontró el servidor principal para el panel de tickets.");
+        return;
+      }
+
       let panelChannel = findChannelByName(guild, CONFIG.CANALES.TICKETS_LOG);
       if (!panelChannel) {
         panelChannel = await guild.channels.create({ name: CONFIG.CANALES.TICKETS_LOG, type: ChannelType.GuildText }).catch(() => null);
       }
-      if (!panelChannel) return;
-
-      const fetched = await panelChannel.messages.fetch({ limit: 50 }).catch(() => null);
-      const existe = fetched && fetched.find(m => m.author?.id === client.user.id && m.embeds?.length && m.embeds[0].title?.includes('Centro de Soporte'));
-      if (!existe) {
-        const embed = new EmbedBuilder()
-          .setTitle('🛠️ Centro de Soporte | Power Luki Network')
-          .setDescription('Selecciona una opción para abrir un ticket y completa el formulario.')
-          .setFooter({ text: 'Power Luki Network' });
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('open_ticket_support').setLabel('Soporte').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('open_ticket_reports').setLabel('Reportes').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('open_ticket_shop').setLabel('Tienda').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('open_ticket_other').setLabel('Otros').setStyle(ButtonStyle.Secondary)
-        );
-        await panelChannel.send({ embeds: [embed], components: [row] }).catch(() => { });
+      
+      if (panelChannel) {
+        const fetched = await panelChannel.messages.fetch({ limit: 50 }).catch(() => null);
+        const existe = fetched && fetched.find(m => m.author?.id === client.user.id && m.embeds?.length && m.embeds[0].title?.includes('Centro de Soporte'));
+        
+        if (!existe) {
+          const embed = new EmbedBuilder()
+            .setTitle('🛠️ Centro de Soporte | Power Luki Network')
+            .setDescription('Selecciona una opción abajo para abrir un ticket y ser atendido por el staff.')
+            .setColor('#0099ff')
+            .setFooter({ text: 'Power Luki Network Support' });
+            
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('open_ticket_support').setLabel('Soporte').setEmoji('🔧').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('open_ticket_reports').setLabel('Reportes').setEmoji('🚨').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('open_ticket_shop').setLabel('Tienda').setEmoji('🛒').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('open_ticket_other').setLabel('Otros').setEmoji('❔').setStyle(ButtonStyle.Secondary)
+          );
+          await panelChannel.send({ embeds: [embed], components: [row] }).catch(() => { });
+          console.log('✅ Panel de tickets publicado.');
+        }
       }
     } catch (e) {
       console.error('Error publicando panel de tickets:', e);
     }
   } catch (e) {
-    console.error('Error en ready:', e);
+    console.error('Error general en ready:', e);
   }
 });
 
-/* ───────── INTERACTIONS (slashes / buttons / modals) ───────── */
+/* ───────── INTERACCIONES (Comandos, Botones, Modales) ───────── */
 client.on('interactionCreate', async (interaction) => {
   try {
-    if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
+    /* CHAT COMMANDS */
+    if (interaction.isChatInputCommand()) {
       const name = interaction.commandName;
 
-      /* /ticket */
+      // /ticket
       if (name === 'ticket') {
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: 'Usa esto en servidores.', ephemeral: true });
         if (openTickets.has(interaction.user.id)) return interaction.reply({ content: 'Ya tienes un ticket abierto.', ephemeral: true });
-        const category = guild.channels.cache.find(c => c.name === CONFIG.CANALES.TICKETS_CATEGORY && c.type === ChannelType.GuildCategory);
-        const channelName = `ticket-${interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}-${interaction.user.discriminator}`.slice(0, 90);
+        
+        let category = guild.channels.cache.find(c => c.name === CONFIG.CANALES.TICKETS_CATEGORY && c.type === ChannelType.GuildCategory);
+        if(!category) category = await guild.channels.create({ name: CONFIG.CANALES.TICKETS_CATEGORY, type: ChannelType.GuildCategory });
+
+        const channelName = `ticket-${interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}`.slice(0, 90);
+        
         const ticketChannel = await guild.channels.create({
           name: channelName, type: ChannelType.GuildText, parent: category ? category.id : undefined,
           permissionOverwrites: [
             { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
-            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
-            { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+            { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] } // Asegúrate que este ID exista
           ]
         }).catch(() => null);
-        if (!ticketChannel) return interaction.reply({ content: 'No se pudo crear el ticket.', ephemeral: true });
+        
+        if (!ticketChannel) return interaction.reply({ content: 'Error creando canal. Verifica permisos del bot.', ephemeral: true });
         openTickets.set(interaction.user.id, ticketChannel.id);
+        
         const logCh = findChannelByName(guild, CONFIG.CANALES.TICKETS_LOG);
-        if (logCh) logCh.send({ embeds: [new EmbedBuilder().setTitle('🎫 Nuevo Ticket').setDescription(`Usuario: ${interaction.user.tag}\nCanal: ${ticketChannel}`)] }).catch(() => { });
+        if (logCh) logCh.send({ embeds: [new EmbedBuilder().setColor('Green').setTitle('🎫 Nuevo Ticket Manual').setDescription(`Usuario: ${interaction.user.tag}\nCanal: ${ticketChannel}`)] }).catch(() => { });
+        
         await ticketChannel.send({ content: `${interaction.user} — Gracias por abrir un ticket. Un staff te atenderá.` }).catch(() => { });
         return interaction.reply({ content: `Ticket creado: ${ticketChannel}`, ephemeral: true });
       }
 
-      /* /sugerencias => publica en valoraciones (público) */
+      // /sugerencias
       if (name === 'sugerencias') {
         const texto = interaction.options.getString('texto');
         const guild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID) || interaction.guild;
         if (!guild) return interaction.reply({ content: 'Servidor no encontrado.', ephemeral: true });
 
         let ch = findChannelByName(guild, CONFIG.CANALES.VALORACIONES);
-        if (!ch) {
-          ch = await guild.channels.create({
-            name: CONFIG.CANALES.VALORACIONES,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-              { id: guild.roles.everyone, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-              { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-            ]
-          }).catch(() => null);
-        }
+        if (!ch) ch = await guild.channels.create({ name: CONFIG.CANALES.VALORACIONES, type: ChannelType.GuildText }).catch(() => null);
         if (!ch) return interaction.reply({ content: 'No se pudo crear/obtener canal de valoraciones.', ephemeral: true });
 
         const id = (suggestionCounter++).toString(36).toUpperCase();
-        const embed = new EmbedBuilder().setTitle(`Sugerencia #${id}`).setDescription(texto)
+        const embed = new EmbedBuilder().setTitle(`Sugerencia #${id}`).setDescription(texto).setColor('#FFFF00')
           .addFields({ name: 'Autor', value: interaction.user.tag, inline: true }, { name: 'ID', value: id, inline: true })
           .setFooter({ text: `Power Lucky Network • ${formatTimestamp()}` }).setTimestamp();
 
@@ -223,36 +236,26 @@ client.on('interactionCreate', async (interaction) => {
 
         const msg = await ch.send({ embeds: [embed], components: [row] }).catch(() => null);
         suggestionsDB.set(id, { id, author: interaction.user.id, texto, messageId: msg ? msg.id : null, channelId: ch.id, status: 'pending', createdAt: Date.now() });
-        return interaction.reply({ content: 'Sugerencia enviada a Valoraciones. Gracias :)', ephemeral: true });
+        return interaction.reply({ content: 'Sugerencia enviada a Valoraciones.', ephemeral: true });
       }
 
-      /* /sugerenciaserver => al canal privado staff */
+      // /sugerenciaserver
       if (name === 'sugerenciaserver') {
         const texto = interaction.options.getString('texto');
         const mainGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID) || interaction.guild;
-        if (!mainGuild) return interaction.reply({ content: 'Servidor principal no disponible.', ephemeral: true });
-
+        
         let staffCh = findChannelByName(mainGuild, CONFIG.CANALES.STAFF_REVIEW);
-        if (!staffCh) {
-          staffCh = await mainGuild.channels.create({
-            name: CONFIG.CANALES.STAFF_REVIEW,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-              { id: mainGuild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
-              { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageMessages] }
-            ]
-          }).catch(() => null);
-        }
-        if (!staffCh) return interaction.reply({ content: 'No se pudo crear canal staff.', ephemeral: true });
+        if (!staffCh) staffCh = await mainGuild.channels.create({ name: CONFIG.CANALES.STAFF_REVIEW, type: ChannelType.GuildText }).catch(() => null);
+        if (!staffCh) return interaction.reply({ content: 'No se pudo contactar al canal staff.', ephemeral: true });
 
         const id = (suggestionCounter++).toString(36).toUpperCase();
-        const embed = new EmbedBuilder().setTitle(`Sugerencia para staff #${id}`).setDescription(texto)
+        const embed = new EmbedBuilder().setTitle(`Sugerencia Staff #${id}`).setDescription(texto).setColor('Orange')
           .addFields({ name: 'Autor', value: interaction.user.tag, inline: true }, { name: 'ID', value: id, inline: true })
-          .setFooter({ text: `Power Lucky Network • ${formatTimestamp()}` }).setTimestamp();
+          .setFooter({ text: `Revisión requerida • ${formatTimestamp()}` }).setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`staff_accept_${id}`).setLabel('Aprobado').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`staff_deny_${id}`).setLabel('Desaprobado').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId(`staff_accept_${id}`).setLabel('Aprobar').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`staff_deny_${id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
         );
 
         const msg = await staffCh.send({ embeds: [embed], components: [row] }).catch(() => null);
@@ -260,294 +263,299 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ content: 'Tu sugerencia fue enviada al staff para valoración.', ephemeral: true });
       }
 
-      /* /nuevo /anuncio - envia al servidor principal (staff) */
+      // /nuevo y /anuncio
       if (name === 'nuevo' || name === 'anuncio') {
         const memberRoles = interaction.member?.roles?.cache;
-        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff puede usar esto.', ephemeral: true });
+        // Permitir si es admin o tiene el rol de staff
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator) && (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID))) {
+           return interaction.reply({ content: 'Solo staff/admin puede usar esto.', ephemeral: true });
+        }
+        
         const contenido = interaction.options.getString('mensaje');
-        const targetGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
-        if (!targetGuild) return interaction.reply({ content: 'No se encontró el servidor principal.', ephemeral: true });
+        const targetGuild = interaction.guild;
         const channelName = name === 'nuevo' ? CONFIG.CANALES.NUEVO : CONFIG.CANALES.ANUNCIOS;
+        
         let ch = findChannelByName(targetGuild, channelName);
         if (!ch) ch = await targetGuild.channels.create({ name: channelName, type: ChannelType.GuildText }).catch(() => null);
-        if (!ch) return interaction.reply({ content: `No se pudo encontrar/crear el canal ${channelName}.`, ephemeral: true });
-        const embed = new EmbedBuilder().setTitle(name === 'nuevo' ? '🎊 Nuevo' : '📣 Anuncio').setDescription(contenido).setFooter({ text: 'Power Luki Network' }).setTimestamp();
+        
+        const embed = new EmbedBuilder()
+            .setTitle(name === 'nuevo' ? '🎊 Nuevo' : '📣 Anuncio')
+            .setDescription(contenido)
+            .setColor(name === 'nuevo' ? 'Blue' : 'Red')
+            .setFooter({ text: 'Power Luki Network' }).setTimestamp();
+            
         await ch.send({ embeds: [embed] }).catch(() => { });
-        return interaction.reply({ content: 'Mensaje enviado al servidor principal.', ephemeral: true });
+        return interaction.reply({ content: 'Mensaje enviado.', ephemeral: true });
       }
 
-      /* mute / unmute / ban / temban (staff) */
+      // Moderación: mute, unmute, ban
       if (name === 'mute') {
-        const memberRoles = interaction.member?.roles?.cache;
-        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return interaction.reply({ content: 'Sin permisos.', ephemeral: true });
+        
         const usuario = interaction.options.getUser('usuario');
         const duracion = interaction.options.getString('duracion');
-        const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: 'Comando solo en servidor.', ephemeral: true });
-        const member = await guild.members.fetch(usuario.id).catch(() => null);
+        const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
         if (!member) return interaction.reply({ content: 'Usuario no encontrado.', ephemeral: true });
-        const mutedRole = await ensureMutedRole(guild);
-        if (!mutedRole) return interaction.reply({ content: 'No se pudo crear rol Muted.', ephemeral: true });
-        await member.roles.add(mutedRole, `Mute por ${interaction.user.tag}`).catch(() => { });
-        const ch = findChannelByName(guild, CONFIG.CANALES.SILENCIADOS);
-        if (ch) ch.send({ embeds: [new EmbedBuilder().setTitle('🔇 Usuario silenciado').setDescription(`${usuario.tag} silenciado por ${interaction.user.tag}${duracion ? `\nDuración: ${duracion}` : ''}`).setTimestamp()] }).catch(() => { });
-        interaction.reply({ content: `Usuario ${usuario.tag} silenciado.`, ephemeral: true });
+        
+        const mutedRole = await ensureMutedRole(interaction.guild);
+        await member.roles.add(mutedRole).catch(() => {});
+        
+        const ch = findChannelByName(interaction.guild, CONFIG.CANALES.SILENCIADOS);
+        if (ch) ch.send({ embeds: [new EmbedBuilder().setTitle('🔇 Muteado').setDescription(`${usuario.tag} silenciado por ${interaction.user.tag}`).setColor('Grey')] });
+        
+        interaction.reply({ content: `Silenciado ${usuario.tag}`, ephemeral: true });
+        
         if (duracion) {
-          const ms = parseTimeToMs(duracion);
-          if (ms) setTimeout(async () => {
-            const fetched = await guild.members.fetch(usuario.id).catch(() => null);
-            if (fetched) {
-              await fetched.roles.remove(mutedRole).catch(() => { });
-              const ch2 = findChannelByName(guild, CONFIG.CANALES.DESILENCIADOS);
-              if (ch2) ch2.send({ embeds: [new EmbedBuilder().setTitle('🔉 Usuario desilenciado').setDescription(`${usuario.tag} fue desilenciado automáticamente`).setTimestamp()] }).catch(() => { });
-            }
-          }, ms);
+           const ms = parseTimeToMs(duracion);
+           if (ms) setTimeout(async () => {
+              if (member.roles.cache.has(mutedRole.id)) {
+                  await member.roles.remove(mutedRole);
+                  const ch2 = findChannelByName(interaction.guild, CONFIG.CANALES.DESILENCIADOS);
+                  if (ch2) ch2.send({ content: `${usuario.tag} desilenciado automáticamente.` });
+              }
+           }, ms);
         }
-        return;
       }
 
       if (name === 'unmute') {
-        const memberRoles = interaction.member?.roles?.cache;
-        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
-        const usuario = interaction.options.getUser('usuario'); const guild = interaction.guild;
-        const member = await guild.members.fetch(usuario.id).catch(() => null);
-        const muted = guild.roles.cache.find(r => r.name === 'Muted');
-        if (muted && member && member.roles.cache.has(muted.id)) {
-          await member.roles.remove(muted).catch(() => { });
-          const ch = findChannelByName(guild, CONFIG.CANALES.DESILENCIADOS);
-          if (ch) ch.send({ embeds: [new EmbedBuilder().setTitle('🔉 Usuario desilenciado').setDescription(`${usuario.tag} fue desilenciado por ${interaction.user.tag}`).setTimestamp()] }).catch(() => { });
-          return interaction.reply({ content: 'Usuario desilenciado.', ephemeral: true });
-        } else return interaction.reply({ content: 'Usuario no estaba silenciado.', ephemeral: true });
+         if (!interaction.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return interaction.reply({ content: 'Sin permisos.', ephemeral: true });
+         const usuario = interaction.options.getUser('usuario');
+         const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
+         const muted = interaction.guild.roles.cache.find(r => r.name === 'Muted');
+         if (member && muted) {
+             await member.roles.remove(muted);
+             return interaction.reply({ content: 'Usuario desilenciado.', ephemeral: true });
+         }
+         return interaction.reply({ content: 'No se pudo desilenciar.', ephemeral: true });
       }
 
       if (name === 'ban' || name === 'temban') {
-        const memberRoles = interaction.member?.roles?.cache;
-        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Necesitas ser staff.', ephemeral: true });
-        const usuario = interaction.options.getUser('usuario'); const razon = interaction.options.getString('razon') || 'No especificada'; const guild = interaction.guild;
-        await guild.bans.create(usuario.id, { reason: `${razon} - por ${interaction.user.tag}` }).catch(() => { });
-        const ch = findChannelByName(guild, CONFIG.CANALES.BANEOS);
-        if (ch) ch.send({ embeds: [new EmbedBuilder().setTitle('🔨 Usuario baneado').setDescription(`${usuario.tag} fue baneado por ${interaction.user.tag}\nRazón: ${razon}`).setTimestamp()] }).catch(() => { });
-        interaction.reply({ content: `${usuario.tag} baneado.`, ephemeral: true });
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return interaction.reply({ content: 'Sin permisos.', ephemeral: true });
+        const usuario = interaction.options.getUser('usuario');
+        const razon = interaction.options.getString('razon') || 'Sin razón';
+        
+        await interaction.guild.bans.create(usuario.id, { reason: `${razon} - por ${interaction.user.tag}` });
+        
+        const ch = findChannelByName(interaction.guild, CONFIG.CANALES.BANEOS);
+        if (ch) ch.send({ embeds: [new EmbedBuilder().setTitle('🔨 Baneado').setDescription(`${usuario.tag}\nRazón: ${razon}`).setColor('DarkRed')] });
+        
+        interaction.reply({ content: 'Usuario baneado.', ephemeral: true });
+        
         if (name === 'temban') {
-          const tiempo = interaction.options.getString('tiempo'); const ms = parseTimeToMs(tiempo);
-          if (ms) setTimeout(async () => { await guild.bans.remove(usuario.id).catch(() => { }); const ch2 = findChannelByName(guild, CONFIG.CANALES.BANEOS); if (ch2) ch2.send({ embeds: [new EmbedBuilder().setTitle('🔨 Ban levantado').setDescription(`${usuario.tag} fue desbaneado automáticamente.`).setTimestamp()] }).catch(() => { }); }, ms);
+            const tiempo = interaction.options.getString('tiempo');
+            const ms = parseTimeToMs(tiempo);
+            if (ms) setTimeout(() => interaction.guild.bans.remove(usuario.id).catch(() => {}), ms);
         }
-        return;
       }
-
-      /* /encuesta (staff) */
+      
       if (name === 'encuesta') {
-        const memberRoles = interaction.member?.roles?.cache;
-        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff.', ephemeral: true });
-        const pregunta = interaction.options.getString('pregunta');
-        const embed = new EmbedBuilder().setTitle('📊 Nueva encuesta').setDescription(pregunta).setFooter({ text: 'Power Lucky Network' }).setTimestamp();
-        const reply = await interaction.reply({ embeds: [embed], fetchReply: true });
-        await reply.react('👍').catch(() => { }); await reply.react('👎').catch(() => { });
-        return;
+         if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return interaction.reply({ content: 'Solo staff.', ephemeral: true });
+         const pregunta = interaction.options.getString('pregunta');
+         const embed = new EmbedBuilder().setTitle('📊 Encuesta').setDescription(pregunta).setColor('Gold');
+         const reply = await interaction.reply({ embeds: [embed], fetchReply: true });
+         await reply.react('👍');
+         await reply.react('👎');
       }
-    } // end isChatInputCommand
+    } // Fin comandos de chat
 
-    // Buttons
-    if (interaction.isButton && interaction.isButton()) {
+    /* BUTTONS */
+    if (interaction.isButton()) {
       const id = interaction.customId;
 
-      // Panel buttons -> abrir ticket
+      // Abrir tickets desde el panel
       if (id.startsWith('open_ticket_')) {
-        const type = id.split('_')[2]; // support, reports, shop, other
+        const type = id.split('_')[2]; 
         if (openTickets.has(interaction.user.id)) return interaction.reply({ content: 'Ya tienes un ticket abierto.', ephemeral: true });
+        
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: 'Comando en servidor solamente.', ephemeral: true });
-        const category = guild.channels.cache.find(c => c.name === CONFIG.CANALES.TICKETS_CATEGORY && c.type === ChannelType.GuildCategory);
+        let category = guild.channels.cache.find(c => c.name === CONFIG.CANALES.TICKETS_CATEGORY && c.type === ChannelType.GuildCategory);
+        if (!category) category = await guild.channels.create({ name: CONFIG.CANALES.TICKETS_CATEGORY, type: ChannelType.GuildCategory });
+
         const channelName = `ticket-${interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '')}-${type}`.slice(0, 90);
         const ticketChannel = await guild.channels.create({
-          name: channelName, type: ChannelType.GuildText, parent: category ? category.id : undefined, permissionOverwrites: [
+          name: channelName, type: ChannelType.GuildText, parent: category.id, permissionOverwrites: [
             { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
-            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
+            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
             { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
           ]
         }).catch(() => null);
-        if (!ticketChannel) return interaction.reply({ content: 'No se pudo crear ticket.', ephemeral: true });
+
+        if (!ticketChannel) return interaction.reply({ content: 'Error creando canal.', ephemeral: true });
         openTickets.set(interaction.user.id, ticketChannel.id);
+        
         const logCh = findChannelByName(guild, CONFIG.CANALES.TICKETS_LOG);
-        if (logCh) logCh.send({ embeds: [new EmbedBuilder().setTitle('🎫 Nuevo Ticket').setDescription(`${interaction.user.tag}\nCanal: ${ticketChannel}`)] }).catch(() => { });
-        await ticketChannel.send({ content: `${interaction.user} - Describe tu problema.` }).catch(() => { });
+        if (logCh) logCh.send({ embeds: [new EmbedBuilder().setTitle('🎫 Nuevo Ticket Panel').setDescription(`Usuario: ${interaction.user.tag} (${type})\nCanal: ${ticketChannel}`).setColor('Blue')] }).catch(() => { });
+        
+        await ticketChannel.send({ content: `${interaction.user} | Staff: <@&${CONFIG.STAFF_ROLE_ID}>\nDescribe tu problema aquí.` }).catch(() => { });
         return interaction.reply({ content: `Ticket creado: ${ticketChannel}`, ephemeral: true });
       }
 
-      // Votos públicos (sugerencias)
+      // Votos sugerencias
       if (id.startsWith('public_like_') || id.startsWith('public_dislike_')) {
-        const parts = id.split('_'); const sId = parts[2];
+        const sId = id.split('_')[2];
         const data = suggestionsDB.get(sId);
-        if (!data) return interaction.reply({ content: 'Sugerencia no encontrada.', ephemeral: true });
-        const guild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
-        const ch = guild?.channels.cache.get(data.channelId) || findChannelByName(guild, CONFIG.CANALES.VALORACIONES);
-        if (!ch) return interaction.reply({ content: 'Canal no encontrado.', ephemeral: true });
-        const msg = await ch.messages.fetch(data.messageId).catch(() => null);
-        if (!msg) return interaction.reply({ content: 'Mensaje no encontrado.', ephemeral: true });
-        const emoji = id.startsWith('public_like_') ? '👍' : '👎';
-        await msg.react(emoji).catch(() => { });
-        return interaction.reply({ content: `Voto registrado ${emoji}`, ephemeral: true });
+        if (!data) return interaction.reply({ content: 'Sugerencia antigua o no encontrada.', ephemeral: true });
+        
+        // Intentar obtener el mensaje para reaccionar si no funciona el botón directo
+        // (Aquí solo simulamos la respuesta ya que los botones hacen de contador visual si se implementa lógica extra, pero reaccionaremos al mensaje)
+        const channel = interaction.guild.channels.cache.get(data.channelId);
+        if (channel) {
+            const msg = await channel.messages.fetch(data.messageId).catch(() => null);
+            if (msg) {
+                const emoji = id.includes('like') && !id.includes('dislike') ? '👍' : '👎';
+                await msg.react(emoji).catch(() => {});
+            }
+        }
+        return interaction.reply({ content: 'Voto registrado.', ephemeral: true });
       }
 
-      // Staff: valoración obligatoria (desde canal staff)
+      // Staff aceptar/rechazar
       if (id.startsWith('staff_accept_') || id.startsWith('staff_deny_')) {
-        const memberRoles = interaction.member?.roles?.cache;
-        if (!memberRoles || !memberRoles.has(CONFIG.STAFF_ROLE_ID)) return interaction.reply({ content: 'Solo staff puede valorar.', ephemeral: true });
-        const modal = new ModalBuilder().setCustomId(`${id}_modal`).setTitle(id.startsWith('staff_accept_') ? 'Razón de aprobación' : 'Razón de denegación');
-        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Razón (opcional)').setStyle(TextInputStyle.Paragraph).setRequired(false)));
+        const modal = new ModalBuilder().setCustomId(`${id}_modal`).setTitle(id.includes('accept') ? 'Aprobar Sugerencia' : 'Rechazar Sugerencia');
+        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Razón').setStyle(TextInputStyle.Paragraph).setRequired(true)));
         await interaction.showModal(modal);
-        return;
-      }
-    } // end buttons
-
-    // Modal submit (staff reason)
-    if (interaction.type === InteractionType.ModalSubmit) {
-      const cid = interaction.customId;
-      if (cid.startsWith('staff_accept_') || cid.startsWith('staff_deny_')) {
-        const parts = cid.split('_'); const action = parts[1]; const sId = parts[2];
-        const reason = interaction.fields.getTextInputValue('reason') || 'No se proporcionó un motivo';
-        const data = suggestionsDB.get(sId);
-        if (!data) return interaction.reply({ content: 'Sugerencia no encontrada.', ephemeral: true });
-
-        const mainGuild = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID);
-        if (!mainGuild) return interaction.reply({ content: 'Servidor no disponible.', ephemeral: true });
-        let valorCh = findChannelByName(mainGuild, CONFIG.CANALES.VALORACIONES);
-        if (!valorCh) valorCh = await mainGuild.channels.create({ name: CONFIG.CANALES.VALORACIONES, type: ChannelType.GuildText }).catch(() => null);
-        if (!valorCh) return interaction.reply({ content: 'No se pudo obtener canal de valoraciones.', ephemeral: true });
-
-        const finalEmbed = new EmbedBuilder()
-          .setTitle(action === 'accept' ? `La sugerencia #${sId} fue aprobada` : `La sugerencia #${sId} fue desaprobada`)
-          .addFields({ name: 'Sugerencia', value: data.texto || '—' }, { name: 'Razón', value: reason }, { name: 'Staff', value: interaction.user.tag })
-          .setFooter({ text: `ID de Sugerencia: ${sId} | ${formatTimestamp()}` })
-          .setTimestamp();
-
-        await valorCh.send({ embeds: [finalEmbed] }).catch(() => null);
-        data.status = action === 'accept' ? 'accepted' : 'denied';
-        suggestionsDB.set(sId, data);
-
-        // editar mensaje original en canal staff (desactivar botones)
-        try {
-          const staffCh = client.guilds.cache.get(CONFIG.MAIN_GUILD_ID)?.channels.cache.get(data.channelId);
-          if (staffCh) {
-            const orig = await staffCh.messages.fetch(data.messageId).catch(() => null);
-            if (orig) orig.edit({ components: [] }).catch(() => { });
-          }
-        } catch (e) { /* noop */ }
-
-        return interaction.reply({ content: `Sugerencia ${action === 'accept' ? 'aprobada' : 'desaprobada'} y publicada en Valoraciones.`, ephemeral: true });
       }
     }
+
+    /* MODALS */
+    if (interaction.type === InteractionType.ModalSubmit) {
+       const cid = interaction.customId;
+       if (cid.includes('staff_accept_') || cid.includes('staff_deny_')) {
+          const parts = cid.split('_'); 
+          const action = parts[1]; // accept/deny
+          const sId = parts[2];
+          const reason = interaction.fields.getTextInputValue('reason');
+          
+          const data = suggestionsDB.get(sId);
+          if (data) {
+             const guild = interaction.guild;
+             let valCh = findChannelByName(guild, CONFIG.CANALES.VALORACIONES);
+             if (!valCh) valCh = await guild.channels.create({ name: CONFIG.CANALES.VALORACIONES, type: ChannelType.GuildText });
+             
+             const color = action === 'accept' ? 'Green' : 'Red';
+             const title = action === 'accept' ? '✅ Sugerencia Aprobada' : '❌ Sugerencia Rechazada';
+             
+             const embed = new EmbedBuilder().setTitle(title).setColor(color)
+                .addFields(
+                    { name: 'Sugerencia Original', value: data.texto },
+                    { name: 'Razón del Staff', value: reason },
+                    { name: 'Staff', value: interaction.user.tag }
+                ).setFooter({ text: `ID: ${sId}` }).setTimestamp();
+                
+             await valCh.send({ embeds: [embed] });
+             
+             // Borrar o editar mensaje del staff
+             try {
+                const staffCh = guild.channels.cache.get(data.channelId);
+                const msg = await staffCh.messages.fetch(data.messageId);
+                if (msg) msg.edit({ components: [], content: `**Procesada como: ${action}**` });
+             } catch(e) {}
+             
+             interaction.reply({ content: 'Procesado.', ephemeral: true });
+          } else {
+             interaction.reply({ content: 'Error: Datos no encontrados.', ephemeral: true });
+          }
+       }
+    }
+
   } catch (err) {
-    console.error('Error en interactionCreate:', err);
+    console.error('Error interacción:', err);
   }
 });
 
-/* ───────── MENSAJES (ip, tienda, !cerrar, niveles) ───────── */
+/* ───────── EVENTOS DE MENSAJES ───────── */
 client.on('messageCreate', async (message) => {
-  try {
-    if (!message.guild || message.author.bot) return;
-    const content = message.content.toLowerCase();
+  if (!message.guild || message.author.bot) return;
+  const content = message.content.toLowerCase();
 
-    if (content === '!ip' || content === 'ip') {
-      const ipEmbed = new EmbedBuilder().setTitle(`${CONFIG.EMOJIS.IP} IP DEL SERVIDOR`).setColor('#00FFFF')
-        .setDescription(`━━━━━━━━━━━━━━━━━━\n\n${CONFIG.EMOJIS.JAVA} **Java:** \`${CONFIG.SERVER_IP}\`\n${CONFIG.EMOJIS.BEDROCK} **Bedrock:** \`${CONFIG.SERVER_IP}\`\n**Puerto:** \`${CONFIG.SERVER_PORT}\`\n**Versiones:** ${CONFIG.VERSIONS}\n\n━━━━━━━━━━━━━━━━━━`).setFooter({ text: 'PowerMax Network • Conéctate ya' }).setTimestamp();
-      message.channel.send({ embeds: [ipEmbed] }).catch(() => { });
-      return;
-    }
+  // Comandos simples
+  if (content === '!ip' || content === 'ip') {
+    const ipEmbed = new EmbedBuilder().setTitle(`${CONFIG.EMOJIS.IP} IP DEL SERVIDOR`).setColor('#00FFFF')
+      .setDescription(`**Java:** \`${CONFIG.SERVER_IP}\`\n**Bedrock:** \`${CONFIG.SERVER_IP}\`\n**Puerto:** \`${CONFIG.SERVER_PORT}\``)
+      .setFooter({ text: 'PowerMax Network' });
+    return message.channel.send({ embeds: [ipEmbed] });
+  }
 
-    if (content === `${CONFIG.PREFIJO}tienda` || content.includes('donar') || content.includes('comprar') || content.includes('shop') || content.includes('store')) {
-      const shopEmbed = new EmbedBuilder().setTitle(`${CONFIG.EMOJIS.TIENDA} TIENDA OFICIAL`).setColor('#FFCC00').setDescription(`━━━━━━━━━━━━━━━━━━\n\n**¡Apoya al servidor comprando rangos y mejoras!**\n\n🔗 https://tienda.powermax.com\n\n━━━━━━━━━━━━━━━━━━`).setFooter({ text: 'PowerMax Shop • Gracias por apoyar' }).setTimestamp();
-      message.channel.send({ embeds: [shopEmbed] }).catch(() => { });
-      return;
-    }
+  if (content.includes('!tienda') || content.includes('!store')) {
+    const shopEmbed = new EmbedBuilder().setTitle(`${CONFIG.EMOJIS.TIENDA} TIENDA`).setColor('#FFCC00')
+      .setDescription(`Adquiere rangos aquí: https://tienda.powermax.com`);
+    return message.channel.send({ embeds: [shopEmbed] });
+  }
 
-    // cerrar ticket
-    if (content.startsWith('!cerrar') || content.startsWith(`${CONFIG.PREFIJO}cerrar`)) {
-      const ch = message.channel;
-      const userEntry = [...openTickets.entries()].find(([uid, cid]) => cid === ch.id);
-      if (!userEntry) return message.reply('Este comando solo funciona dentro de un ticket.');
-      const [uid] = userEntry;
-      openTickets.delete(uid);
-      await ch.send('Cerrando ticket en 5 segundos...').catch(() => { });
-      setTimeout(() => ch.delete('Ticket cerrado').catch(() => { }), 5000);
-      return;
+  // Cerrar ticket
+  if (content.startsWith('!cerrar')) {
+    const channelId = message.channel.id;
+    // Buscar si este canal es un ticket
+    const isTicket = [...openTickets.values()].includes(channelId);
+    
+    if (isTicket || message.channel.name.startsWith('ticket-')) {
+       message.channel.send('🛑 Cerrando ticket en 5 segundos...');
+       // Limpiar de memoria
+       for (let [uid, cid] of openTickets.entries()) {
+           if (cid === channelId) openTickets.delete(uid);
+       }
+       setTimeout(() => message.channel.delete().catch(() => {}), 5000);
     }
+  }
 
-    // niveles (XP)
-    const userId = message.author.id;
-    let data = nivelesDB.get(userId) || { xp: 0, nivel: 1, lastXP: 0 };
-    if (Date.now() - data.lastXP > 60000) {
-      data.xp += Math.floor(Math.random() * 15) + 10;
-      data.lastXP = Date.now();
-      const xpNecesaria = Math.min(999, data.nivel) * 250;
-      if (data.xp >= xpNecesaria) {
-        data.nivel++;
-        data.xp = 0;
-        const canalNiveles = message.guild.channels.cache.find(c => c.name === CONFIG.CANALES.NIVELES);
-        if (canalNiveles) {
-          const embed = new EmbedBuilder().setTitle('🌟 ¡LEVEL UP! 🌟').setDescription(`🎉 <@${message.author.id}> ha subido al Nivel ${data.nivel} 🎉`).setFooter({ text: 'Power Luki Network' }).setTimestamp();
-          canalNiveles.send({ content: `🎉 <@${message.author.id}>`, embeds: [embed] }).catch(() => { });
-        }
-      }
-      nivelesDB.set(userId, data);
+  // Sistema de Niveles (XP)
+  const userId = message.author.id;
+  let data = nivelesDB.get(userId) || { xp: 0, nivel: 1, lastXP: 0 };
+  
+  if (Date.now() - data.lastXP > 60000) { // Cooldown de 1 min
+    data.xp += Math.floor(Math.random() * 15) + 10;
+    data.lastXP = Date.now();
+    
+    const xpNecesaria = data.nivel * 250;
+    if (data.xp >= xpNecesaria) {
+      data.nivel++;
+      data.xp = 0;
+      const ch = findChannelByName(message.guild, CONFIG.CANALES.NIVELES);
+      if (ch) ch.send({ content: `🎉 ¡Felicidades <@${userId}>! Has subido al nivel **${data.nivel}**!` });
     }
-  } catch (err) {
-    console.error('Error en messageCreate:', err);
+    nivelesDB.set(userId, data);
   }
 });
 
 /* ───────── BIENVENIDAS / DESPEDIDAS ───────── */
 client.on('guildMemberAdd', async member => {
-  try {
-    const ch = findChannelByName(member.guild, CONFIG.CANALES.BIENVENIDAS);
-    if (!ch) return;
-    const embed = new EmbedBuilder()
-      .setTitle(`✨ ¡Bienvenido, ${member.user.username}! ✨`)
-      .setDescription(`-_- - POWER LUKI NETWORK -_- \n\n💎 ${member.user.tag} ha llegado a nuestra comunidad.\n🎇 ¡Disfruta tu estadía!`)
-      .setThumbnail(member.user.displayAvatarURL())
-      .setFooter({ text: 'Power Luki Network • Donde cada miembro brilla' })
-      .setTimestamp();
-    ch.send({ embeds: [embed] }).catch(() => { });
-  } catch (e) { console.error(e); }
+  const ch = findChannelByName(member.guild, CONFIG.CANALES.BIENVENIDAS);
+  if (!ch) return;
+  const embed = new EmbedBuilder()
+    .setTitle(`✨ ¡Bienvenido/a ${member.user.username}!`)
+    .setDescription(`Bienvenido a **Power Luki Network**.\nEsperamos que te diviertas.`)
+    .setThumbnail(member.user.displayAvatarURL())
+    .setColor('Green');
+  ch.send({ embeds: [embed] });
 });
 
 client.on('guildMemberRemove', async member => {
-  try {
-    const ch = findChannelByName(member.guild, CONFIG.CANALES.DESPEDIDAS);
-    if (!ch) return;
-    const embed = new EmbedBuilder()
-      .setTitle(`😔 ¡Hasta pronto, ${member.user.username}! 😔`)
-      .setDescription(`- - - • POWER LUKI NETWORK • - - -\n\n╭━━━━━━━━━━━━━━━━━━━━━━━╮\n💔 ${member.user.tag} nos deja temporalmente.\n🌟 Esperamos volver a verte pronto en Power Luki Network.\n╰━━━━━━━━━━━━━━━━━━━━━━━╯\n\n📌 Recuerda que siempre eres parte de nuestra comunidad.\n- - - • Siempre Bienvenido • - - -`)
-      .setThumbnail(member.user.displayAvatarURL())
-      .setFooter({ text: `Power Luki Network • Nos vemos pronto • ${formatTimestamp()}` })
-      .setTimestamp();
-    ch.send({ embeds: [embed] }).catch(() => { });
-  } catch (e) { console.error(e); }
+  const ch = findChannelByName(member.guild, CONFIG.CANALES.DESPEDIDAS);
+  if (!ch) return;
+  const embed = new EmbedBuilder()
+    .setTitle(`😔 Hasta luego ${member.user.username}`)
+    .setDescription(`Esperamos verte pronto de nuevo.`)
+    .setColor('Red');
+  ch.send({ embeds: [embed] });
 });
 
-/* ───────── SERVIDOR EXPRESS (salud) ───────── */
+/* ───────── SERVIDOR WEB (KEEP ALIVE) ───────── */
 const app = express();
-app.get('/', (_, res) => res.send('Power Max Bot Online ✅'));
+const PORT = process.env.PORT || 3000;
 
-/* ───────── ARRANQUE SEGURO Y CORRECTO ───────── */
-process.on('unhandledRejection', err => {
-  console.error('Unhandled Rejection:', err);
-});
-process.on('uncaughtException', err => {
-  console.error('Uncaught Exception:', err);
+app.get('/', (req, res) => {
+  res.send('✅ Power Luki Bot está EN LÍNEA y funcionando.');
 });
 
+app.listen(PORT, () => {
+  console.log(`🌐 Servidor Web listo en el puerto ${PORT}`);
+});
+
+/* ───────── LOGIN FINAL ───────── */
 if (!process.env.TOKEN) {
-  console.error('❌ ERROR: TOKEN no definido en Render (Environment Variables)');
+  console.error('❌ ERROR CRÍTICO: No se encontró el TOKEN en las variables de entorno (.env)');
 } else {
-  console.log('✅ TOKEN detectado correctamente');
+  client.login(process.env.TOKEN).catch(err => {
+    console.error('❌ ERROR AL INICIAR SESIÓN: Verifica que el TOKEN sea correcto.', err);
+  });
 }
-
-client.login(process.env.TOKEN)
-  .then(() => console.log('🔐 Login a Discord iniciado'))
-  .catch(err => console.error('❌ Error al iniciar sesión en Discord:', err));
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 Servidor de salud activo en puerto ${PORT}`);
-});
