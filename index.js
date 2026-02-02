@@ -692,19 +692,35 @@ const PORT = process.env.PORT || 3000;
 app.get('/', (_, res) => res.send('✅ Power Luki Bot activo'));
 app.listen(PORT, () => console.log(`🌐 Web server escuchando en ${PORT}`));
 
-/* ----------------- LOGIN CON DEBUG AVANZADO ----------------- */
+/* ----------------- LOGIN CON DEBUG ULTRA AVANZADO ----------------- */
 const token = process.env.TOKEN;
+
+// Escuchar eventos de depuración antes de intentar el login
+client.on('debug', (info) => {
+    console.log(`🔍 [DEBUG DISCORD]: ${info}`);
+});
+
+// Escuchar errores específicos del cliente
+client.on('error', (error) => {
+    console.error('⚠️ [CLIENT ERROR]:', error);
+});
 
 if (!token) {
     console.error('❌ ERROR CRÍTICO: El Token es undefined. Revisa la pestaña Environment en Render.');
 } else {
     console.log(`📡 Intentando conectar con token (longitud: ${token.length} caracteres)...`);
     
-    client.login(token)
-        .then(() => console.log('✅ client.login() exitoso: Petición enviada a Discord.'))
-        .catch(err => {
-            console.error('❌ FALLO EL LOGIN:');
-            console.error('Mensaje:', err.message);
-            console.error('Código:', err.code);
-        });
+    // El timeout es para darle un segundo a que el servidor Express respire en Render
+    setTimeout(() => {
+        client.login(token)
+            .then(() => console.log('✅ client.login() exitoso: Petición enviada a Discord.'))
+            .catch(err => {
+                console.error('❌ FALLO EL LOGIN:');
+                console.error('Mensaje:', err.message);
+                console.error('Código:', err.code);
+                if (err.message.includes('Used disallowed intents')) {
+                    console.error('👉 REVISA: No tienes activado "Presence Intent" o "Server Members Intent" en el portal de Discord.');
+                }
+            });
+    }, 1000);
 }
