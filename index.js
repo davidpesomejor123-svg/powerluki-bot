@@ -692,35 +692,29 @@ const PORT = process.env.PORT || 3000;
 app.get('/', (_, res) => res.send('✅ Power Luki Bot activo'));
 app.listen(PORT, () => console.log(`🌐 Web server escuchando en ${PORT}`));
 
-/* ----------------- LOGIN CON DEBUG ULTRA AVANZADO ----------------- */
+/* ----------------- LOGIN DEFINITIVO CON AUTO-REINTENTO ----------------- */
 const token = process.env.TOKEN;
 
-// Escuchar eventos de depuración antes de intentar el login
-client.on('debug', (info) => {
-    console.log(`🔍 [DEBUG DISCORD]: ${info}`);
-});
+async function iniciarBot() {
+    if (!token) {
+        return console.error('❌ ERROR: No hay TOKEN en las variables de entorno.');
+    }
 
-// Escuchar errores específicos del cliente
-client.on('error', (error) => {
-    console.error('⚠️ [CLIENT ERROR]:', error);
-});
-
-if (!token) {
-    console.error('❌ ERROR CRÍTICO: El Token es undefined. Revisa la pestaña Environment en Render.');
-} else {
-    console.log(`📡 Intentando conectar con token (longitud: ${token.length} caracteres)...`);
-    
-    // El timeout es para darle un segundo a que el servidor Express respire en Render
-    setTimeout(() => {
-        client.login(token)
-            .then(() => console.log('✅ client.login() exitoso: Petición enviada a Discord.'))
-            .catch(err => {
-                console.error('❌ FALLO EL LOGIN:');
-                console.error('Mensaje:', err.message);
-                console.error('Código:', err.code);
-                if (err.message.includes('Used disallowed intents')) {
-                    console.error('👉 REVISA: No tienes activado "Presence Intent" o "Server Members Intent" en el portal de Discord.');
-                }
-            });
-    }, 1000);
+    try {
+        console.log(`📡 Intentando conectar (Longitud: ${token.length})...`);
+        await client.login(token);
+        console.log('✅ ¡Bot en línea y conectado a Discord!');
+    } catch (error) {
+        console.error('⚠️ Error al conectar, reintentando en 10 segundos...', error.message);
+        setTimeout(iniciarBot, 10000); // Reintenta cada 10 segundos si falla
+    }
 }
+
+// Escuchar si la sesión se invalida o se desconecta
+client.on('shardDisconnect', () => {
+    console.log('🔌 El bot se desconectó. Intentando reconectar...');
+    iniciarBot();
+});
+
+// Arrancar
+iniciarBot();
