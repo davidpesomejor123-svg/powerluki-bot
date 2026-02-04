@@ -1,4 +1,4 @@
-// index.js — Power Luki Network Bot COMPLETO (final)
+// index.js — Power Luki Network Bot COMPLETO (Corregido)
 import 'dotenv/config';
 import express from 'express';
 import {
@@ -17,7 +17,7 @@ import {
 const CONFIG = {
   TOKEN: process.env.TOKEN,
   MAIN_GUILD_ID: '1458243569075884219', // Servidor principal
-  COMMAND_GUILD_ID: '1340442398442127480', // Servidor donde se ejecuta el comando (opcional)
+  COMMAND_GUILD_ID: '1340442398442127480', // Servidor de comandos
   CHANNELS: {
     ANUNCIOS: '1340756895618699416',
     NUEVO: '1340757162573562007',
@@ -130,13 +130,13 @@ client.once(Events.ClientReady, async () => {
   const commands = [
     new SlashCommandBuilder()
       .setName('anuncio')
-      .setDescription('Enviar anuncio al canal ANUNCIOS')
-      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del anuncio').setRequired(true)),
+      .setDescription('Enviar anuncio al canal ANUNCIOS (Formato Texto)')
+      .addStringOption(o => o.setName('mensaje').setDescription('Pega aquí tu diseño de anuncio').setRequired(true)),
 
     new SlashCommandBuilder()
       .setName('nuevo')
-      .setDescription('Enviar mensaje al canal NUEVO')
-      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del mensaje').setRequired(true)),
+      .setDescription('Enviar mensaje al canal NUEVO (Formato Texto)')
+      .addStringOption(o => o.setName('mensaje').setDescription('Pega aquí tu diseño de mensaje').setRequired(true)),
 
     new SlashCommandBuilder()
       .setName('ban')
@@ -172,7 +172,6 @@ client.once(Events.ClientReady, async () => {
 
   const rest = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
   try {
-    // Registramos globalmente. Cambia a applicationGuildCommands si quieres solo en COMMAND_GUILD_ID.
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
     console.log('✅ Slash commands registrados.');
   } catch (err) {
@@ -184,38 +183,37 @@ client.once(Events.ClientReady, async () => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  // Defer to avoid Unknown interaction on slow ops
   try { await interaction.deferReply({ flags: 64 }); } catch (e) {}
 
   const cmd = interaction.commandName;
 
   try {
-    // ---------- ANUNCIO ----------
+    // ---------- ANUNCIO (CORREGIDO: Sin Embed) ----------
     if (cmd === 'anuncio') {
       const msg = interaction.options.getString('mensaje');
       const ch = await client.channels.fetch(CONFIG.CHANNELS.ANUNCIOS).catch(() => null);
       if (!ch) return safeEditReply(interaction, { content: 'Canal de anuncios no encontrado.', flags: 64 });
 
+      // Se envía el mensaje limpio dentro de bloque de código 'text'
       await ch.send({
-        content: '@everyone',
-        embeds: [ new EmbedBuilder().setTitle('📣 Anuncio').setDescription(msg).setColor('Yellow').setTimestamp() ]
+        content: `@everyone\n\`\`\`text\n${msg}\n\`\`\``
       }).catch(() => {});
 
-      return safeEditReply(interaction, { content: 'Anuncio enviado ✅', flags: 64 });
+      return safeEditReply(interaction, { content: 'Anuncio enviado correctamente ✅', flags: 64 });
     }
 
-    // ---------- NUEVO ----------
+    // ---------- NUEVO (CORREGIDO: Sin Embed) ----------
     if (cmd === 'nuevo') {
       const msg = interaction.options.getString('mensaje');
       const ch = await client.channels.fetch(CONFIG.CHANNELS.NUEVO).catch(() => null);
       if (!ch) return safeEditReply(interaction, { content: 'Canal NUEVO no encontrado.', flags: 64 });
 
+      // Se envía el mensaje limpio dentro de bloque de código 'text'
       await ch.send({
-        content: '@everyone',
-        embeds: [ new EmbedBuilder().setTitle('🆕 Nuevo').setDescription(msg).setColor('Blue').setTimestamp() ]
+        content: `@everyone\n\`\`\`text\n${msg}\n\`\`\``
       }).catch(() => {});
 
-      return safeEditReply(interaction, { content: 'Mensaje NUEVO enviado ✅', flags: 64 });
+      return safeEditReply(interaction, { content: 'Mensaje NUEVO enviado correctamente ✅', flags: 64 });
     }
 
     // ---------- BAN ----------
@@ -356,7 +354,7 @@ client.on('messageCreate', async (message) => {
 ;   ESTADO: ONLINE  ;  VER: 1.21.x    ;
 . _ . ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ . _ .
 `;
-    return message.channel.send({ content: `\`\`\`\n${ipMsg}\n\`\`\`` }).catch(()=>{});
+    return message.channel.send({ content: `\`\`\`text\n${ipMsg}\n\`\`\`` }).catch(()=>{});
   }
 
   if (content.includes('!tienda') || content.includes('tienda')) {
@@ -371,7 +369,7 @@ client.on('messageCreate', async (message) => {
  ;  _ Rangos, Llaves y Beneficios _   ;
 .......................................
 `;
-    return message.channel.send({ content: `\`\`\`\n${shopMsg}\n\`\`\`` }).catch(()=>{});
+    return message.channel.send({ content: `\`\`\`text\n${shopMsg}\n\`\`\`` }).catch(()=>{});
   }
 });
 
