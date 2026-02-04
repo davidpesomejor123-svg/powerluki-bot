@@ -1,4 +1,4 @@
-// index.js — Power Luki Network Bot CORREGIDO (SLASH OPTIONS DESCRIPTIONS)
+// index.js — Power Luki Network Bot CORREGIDO Y AJUSTADO (SLASH /anuncio y /nuevo a canales fijos)
 import 'dotenv/config';
 import express from 'express';
 import {
@@ -6,19 +6,11 @@ import {
   GatewayIntentBits,
   Partials,
   EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ChannelType,
-  PermissionsBitField,
   REST,
   Routes,
   SlashCommandBuilder,
   Events,
-  ActivityType,
+  ActivityType
 } from 'discord.js';
 
 /* ───────── CONFIGURACIÓN ───────── */
@@ -26,25 +18,14 @@ const CONFIG = {
   PREFIJO: '!',
   SERVER_IP: 'powermax.hidenmc.com',
   SERVER_PORT: '24818',
-  MAIN_GUILD_ID: process.env.GUILD_ID,
-  STAFF_ROLE_ID: '1458243569075884219',
-  CANALES: {
-    ANUNCIOS: '📣anuncios',
-    SILENCIADOS: '🔇silenciados',
-    DESILENCIADOS: '🔉desilenciados',
-    BANEOS: '🔨baneos',
-    BIENVENIDAS: '👋bienvenidos',
-    DESPEDIDAS: '😔despedidas'
+  MAIN_GUILD_ID: '1458243569075884219', // Servidor principal donde se enviarán los comandos
+  COMMAND_GUILD_ID: '1340442398442127480', // Servidor donde se ejecuta el comando
+  CHANNELS: {
+    ANUNCIOS: '1340756895618699416', // ID canal anuncios
+    NUEVO: '1340757162573562007' // ID canal nuevo
   },
-  EMOJIS: { TIENDA: '🛒', IP: '🌐' },
-  RAID_PROTECT: { WINDOW_MS: 30_000, JOIN_LIMIT: 5 }
+  EMOJIS: { TIENDA: '🛒', IP: '🌐' }
 };
-
-/* ───────── Comprobación TOKEN ───────── */
-if (!process.env.TOKEN) {
-  console.error('❌ ERROR: process.env.TOKEN no está definido. Añade TOKEN en tu .env o en las variables de entorno del hosting.');
-  process.exit(1);
-}
 
 /* ───────── EXPRESS SERVER ───────── */
 const app = express();
@@ -63,7 +44,6 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-
 /* ───────── READY ───────── */
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Bot conectado como ${client.user.tag} (PID ${process.pid})`);
@@ -72,209 +52,56 @@ client.once(Events.ClientReady, async () => {
   /* ─── Slash commands ─── */
   const commands = [
     new SlashCommandBuilder()
-      .setName('mute')
-      .setDescription('Silenciar un usuario')
-      .addUserOption(o => o.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
-      .addStringOption(o => o.setName('duracion').setDescription('Duración del mute (ej: 10m, 2h)').setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName('unmute')
-      .setDescription('Des-silenciar un usuario')
-      .addUserOption(o => o.setName('usuario').setDescription('Usuario a des-silenciar').setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName('ban')
-      .setDescription('Banear usuario')
-      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
-      .addStringOption(o => o.setName('razon').setDescription('Razón del baneo').setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName('temban')
-      .setDescription('Ban temporal')
-      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear temporalmente').setRequired(true))
-      .addStringOption(o => o.setName('tiempo').setDescription('Tiempo (ej: 1d, 3h)').setRequired(true))
-      .addStringOption(o => o.setName('razon').setDescription('Razón del baneo').setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName('warn')
-      .setDescription('Advertir a un usuario')
-      .addUserOption(o => o.setName('usuario').setDescription('Usuario a advertir').setRequired(true))
-      .addStringOption(o => o.setName('razon').setDescription('Razón de la advertencia').setRequired(true)),
+      .setName('anuncio')
+      .setDescription('Enviar anuncio al canal ANUNCIOS')
+      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del anuncio').setRequired(true)),
 
     new SlashCommandBuilder()
       .setName('nuevo')
       .setDescription('Enviar mensaje al canal NUEVO')
-      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del mensaje a enviar').setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName('anuncio')
-      .setDescription('Enviar anuncio al canal ANUNCIOS')
-      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del anuncio').setRequired(true))
+      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del mensaje a enviar').setRequired(true))
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
   try {
-    const appId = client.application?.id ?? client.user.id;
-    await rest.put(Routes.applicationCommands(appId), { body: commands });
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
     console.log('✅ Slash commands registrados.');
   } catch (err) {
     console.error('❌ Error registrando slash commands:', err);
   }
 });
 
-/* ───────── UTILIDADES ───────── */
-function findChannelByName(guild, name) { return guild?.channels.cache.find(c => c.name === name); }
-function parseTimeToMs(timeStr) {
-  if (!timeStr) return null;
-  const m = timeStr.match(/^(\d+)([mhd])?$/); if (!m) return null;
-  const amount = Number(m[1]); const unit = m[2] || 'm';
-  if (unit === 'm') return amount * 60 * 1000;
-  if (unit === 'h') return amount * 60 * 60 * 1000;
-  if (unit === 'd') return amount * 24 * 60 * 60 * 1000;
-  return null;
-}
-
 /* ───────── INTERACTIONS ───────── */
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const { commandName } = interaction;
-  const guild = interaction.guild;
 
   try {
-    if (commandName === 'mute') {
-      const target = interaction.options.getUser('usuario');
-      const duration = interaction.options.getString('duracion');
-      const mutedRole = guild.roles.cache.find(r => r.name === 'Muted') || await guild.roles.create({ name: 'Muted', permissions: [] });
-      const gMember = await guild.members.fetch(target.id);
-      await gMember.roles.add(mutedRole);
-      await interaction.reply({ content: `🔇 ${target.tag} ha sido silenciado${duration ? ` por ${duration}` : ''}.`, flags: 64 });
-    }
-
-    if (commandName === 'unmute') {
-      const target = interaction.options.getUser('usuario');
-      const mutedRole = guild.roles.cache.find(r => r.name === 'Muted');
-      if (!mutedRole) return interaction.reply({ content: 'No hay rol Muted creado.', flags: 64 });
-      const gMember = await guild.members.fetch(target.id);
-      await gMember.roles.remove(mutedRole);
-      await interaction.reply({ content: `🔊 ${target.tag} ha sido des-silenciado.`, flags: 64 });
-    }
-
-    if (commandName === 'ban') {
-      const target = interaction.options.getUser('usuario');
-      const reason = interaction.options.getString('razon') || 'No especificada';
-      const gMember = await guild.members.fetch(target.id);
-      await gMember.ban({ reason });
-      await interaction.reply({ content: `🔨 ${target.tag} ha sido baneado.\nRazón: ${reason}`, flags: 64 });
-    }
-
-    if (commandName === 'temban') {
-      const target = interaction.options.getUser('usuario');
-      const timeStr = interaction.options.getString('tiempo');
-      const reason = interaction.options.getString('razon') || 'No especificada';
-      const gMember = await guild.members.fetch(target.id);
-      await gMember.ban({ reason });
-      await interaction.reply({ content: `⏱️ ${target.tag} baneado temporalmente por ${timeStr}.\nRazón: ${reason}`, flags: 64 });
-      const ms = parseTimeToMs(timeStr);
-      if (ms) setTimeout(async () => { try { await guild.members.unban(target.id); } catch {} }, ms);
-    }
-
-    if (commandName === 'warn') {
-      const target = interaction.options.getUser('usuario');
-      const reason = interaction.options.getString('razon');
-      await interaction.reply({ content: `⚠️ ${target.tag} ha sido advertido.\nRazón: ${reason}`, flags: 64 });
-    }
-
     if (commandName === 'anuncio') {
       const msg = interaction.options.getString('mensaje');
-      const ch = findChannelByName(guild, CONFIG.CANALES.ANUNCIOS);
-      if (!ch) return interaction.reply({ content: 'Canal de anuncios no encontrado.', flags: 64 });
+      const guild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID);
+      const ch = await guild.channels.fetch(CONFIG.CHANNELS.ANUNCIOS);
+      if (!ch) return interaction.reply({ content: 'Canal de anuncios no encontrado.', ephemeral: true });
       const embed = new EmbedBuilder().setTitle('📣 Anuncio').setDescription(msg).setColor('Yellow');
       await ch.send({ embeds: [embed] });
-      await interaction.reply({ content: 'Anuncio enviado ✅', flags: 64 });
+      await interaction.reply({ content: 'Anuncio enviado al servidor principal ✅', ephemeral: true });
     }
 
     if (commandName === 'nuevo') {
       const msg = interaction.options.getString('mensaje');
-      const ch = findChannelByName(guild, CONFIG.CANALES.BIENVENIDAS);
-      if (!ch) return interaction.reply({ content: 'Canal NUEVO no encontrado.', flags: 64 });
+      const guild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID);
+      const ch = await guild.channels.fetch(CONFIG.CHANNELS.NUEVO);
+      if (!ch) return interaction.reply({ content: 'Canal NUEVO no encontrado.', ephemeral: true });
       await ch.send({ content: msg });
-      await interaction.reply({ content: 'Mensaje enviado ✅', flags: 64 });
+      await interaction.reply({ content: 'Mensaje NUEVO enviado al servidor principal ✅', ephemeral: true });
     }
   } catch (e) {
-    console.error('Error en interaction handler:', e);
-    try { await interaction.reply({ content: '❌ Error ejecutando comando', flags: 64 }); } catch (e2) { console.error('No se pudo enviar reply de error:', e2); }
-  }
-});
-
-/* ───────── MENSAJES AUTOMÁTICOS ───────── */
-client.on('messageCreate', async (message) => {
-  if (!message.guild || message.author.bot) return;
-  const content = message.content.toLowerCase();
-
-  // IP
-  if (content === '!ip' || content === 'ip') {
-    const ipEmbed = new EmbedBuilder()
-      .setTitle(`${CONFIG.EMOJIS.IP} IP DEL SERVIDOR`)
-      .setColor('#00FFFF')
-      .setDescription(`**Java:** \`${CONFIG.SERVER_IP}\`\n**Bedrock:** \`${CONFIG.SERVER_IP}\`\n**Puerto:** \`${CONFIG.SERVER_PORT}\``);
-    return message.channel.send({ embeds: [ipEmbed] }).catch(() => {});
-  }
-
-  // Tienda
-  if (content.includes('!tienda') || content.includes('tienda')) {
-    const shopEmbed = new EmbedBuilder()
-      .setTitle(`${CONFIG.EMOJIS.TIENDA} TIENDA`)
-      .setColor('#FFCC00')
-      .setDescription(`Adquiere rangos aquí: https://tienda.powermax.com`);
-    return message.channel.send({ embeds: [shopEmbed] }).catch(() => {});
-  }
-});
-
-/* ───────── BIENVENIDAS Y DESPEDIDAS ───────── */
-client.on('guildMemberAdd', async (member) => {
-  try {
-    const ch = findChannelByName(member.guild, CONFIG.CANALES.BIENVENIDAS);
-    if (!ch) return;
-    const embed = new EmbedBuilder()
-      .setTitle(`✨ ¡Bienvenido/a ${member.user.username}!`)
-      .setDescription(`Bienvenido a **Power Luki Network**.`)
-      .setThumbnail(member.user.displayAvatarURL())
-      .setColor('Green');
-    ch.send({ embeds: [embed] }).catch(() => {});
-  } catch (e) {
-    console.error('Error en guildMemberAdd:', e);
-  }
-});
-
-client.on('guildMemberRemove', async (member) => {
-  try {
-    const ch = findChannelByName(member.guild, CONFIG.CANALES.DESPEDIDAS);
-    if (!ch) return;
-    const embed = new EmbedBuilder()
-      .setTitle(`😔 Hasta luego ${member.user.username}`)
-      .setDescription(`Esperamos verte pronto de nuevo.`)
-      .setThumbnail(member.user.displayAvatarURL())
-      .setColor('Red');
-    ch.send({ embeds: [embed] }).catch(() => {});
-  } catch (e) {
-    console.error('Error en guildMemberRemove:', e);
+    console.error('Error en command handler:', e);
+    try { await interaction.reply({ content: '❌ Error ejecutando comando', ephemeral: true }); } catch {};
   }
 });
 
 /* ───────── LOGIN ───────── */
 client.login(process.env.TOKEN)
   .then(() => console.log('✅ Token detectado y bot logueado'))
-  .catch((err) => {
-    console.error('❌ Error al loguear el bot:', err);
-    process.exit(1);
-  });
-
-/* ───────── HARDENED LOGS / ERR HANDLING ───────── */
-process.on('unhandledRejection', (reason, p) => {
-  console.error('Unhandled Rejection at:', p, 'reason:', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
-
+  .catch((err) => { console.error('❌ Error al loguear el bot:', err); process.exit(1); });
