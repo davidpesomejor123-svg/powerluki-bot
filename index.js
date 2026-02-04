@@ -1,4 +1,4 @@
-// index.js — Power Luki Network Bot (Versión Blindada v2)
+// index.js — Power Luki Network Bot (Versión Final Blindada)
 import 'dotenv/config';
 import express from 'express';
 import {
@@ -16,8 +16,8 @@ import {
 /* ───────── CONFIG ───────── */
 const CONFIG = {
   TOKEN: process.env.TOKEN,
-  MAIN_GUILD_ID: '1458243569075884219', // ID de tu servidor principal
-  COMMAND_GUILD_ID: '1340442398442127480', // ID del servidor de comandos
+  MAIN_GUILD_ID: '1458243569075884219',
+  COMMAND_GUILD_ID: '1340442398442127480',
   CHANNELS: {
     ANUNCIOS: '1340756895618699416',
     NUEVO: '1340757162573562007',
@@ -45,7 +45,7 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-/* ───────── EXPRESS (status) ───────── */
+/* ───────── EXPRESS ───────── */
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (_, res) => res.send(`🤖 Bot Power Luki: ${client?.ws?.status === 0 ? 'ONLINE ✅' : 'CONECTANDO...'}`));
@@ -64,29 +64,26 @@ function parseTimeToMs(timeStr) {
   if (unit === 'd') return n * 24 * 60 * 60 * 1000;
   return null;
 }
+
 function formatDateTime(dateOrMs) {
   const d = typeof dateOrMs === 'number' ? new Date(dateOrMs) : new Date(dateOrMs);
   return d.toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa' });
 }
 
-// FUNCIÓN CORREGIDA Y BLINDADA PARA EVITAR EL ERROR InteractionNotReplied
+// FUNCIÓN CORREGIDA PARA EVITAR WARNINGS Y ERRORES DE INTERACCIÓN
 async function safeEditReply(interaction, data) {
   try {
-    // Verificamos si la interacción ya fue diferida o respondida
+    // Si ya respondimos o diferimos, usamos editReply (sin flags, porque no se pueden cambiar después)
     if (interaction.deferred || interaction.replied) {
-      return await interaction.editReply(data);
+      // Limpiamos 'ephemeral' o 'flags' de la data si existen, para que no de warning al editar
+      const { ephemeral, flags, ...cleanData } = data;
+      return await interaction.editReply(cleanData);
     } else {
-      // Si no ha sido respondida, respondemos directamente (Ephemeral por seguridad)
-      return await interaction.reply({ ...data, ephemeral: true });
+      // Si es la primera respuesta, usamos reply con flags 64 (mensaje oculto/ephemeral)
+      return await interaction.reply({ ...data, flags: 64 });
     }
   } catch (e) {
-    console.error('⚠️ No se pudo enviar la respuesta de confirmación:', e.message);
-    // Intentamos un followUp como último recurso si no es un error de "desconocido"
-    try {
-        if (!e.message.includes('Unknown interaction')) {
-            await interaction.followUp({ ...data, ephemeral: true });
-        }
-    } catch (e2) {}
+    console.error('⚠️ Error al responder interacción:', e.message);
   }
 }
 
@@ -136,7 +133,7 @@ function makeLeaveEmbed(member) {
     .setTimestamp();
 }
 
-/* ───────── READY + REGISTER SLASH COMMANDS ───────── */
+/* ───────── READY + SLASH COMMANDS ───────── */
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Bot conectado como ${client.user.tag}`);
   try { await client.user.setActivity('Power Luki Network', { type: ActivityType.Playing }); } catch (e) { console.warn(e); }
@@ -156,18 +153,18 @@ client.once(Events.ClientReady, async () => {
       .setName('ban')
       .setDescription('Banear usuario')
       .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
-      .addStringOption(o => o.setName('razon').setDescription('Razón').setRequired(false)),
+      .addStringOption(o => o.setName('razon').setDescription('Razón del baneo').setRequired(false)),
 
     new SlashCommandBuilder()
       .setName('temban')
-      .setDescription('Ban temporal (ej: 10s, 5m, 1h)')
+      .setDescription('Ban temporal')
       .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
-      .addStringOption(o => o.setName('tiempo').setDescription('Tiempo').setRequired(true))
+      .addStringOption(o => o.setName('tiempo').setDescription('Tiempo (10s, 5m, 1h)').setRequired(true))
       .addStringOption(o => o.setName('razon').setDescription('Razón').setRequired(false)),
 
     new SlashCommandBuilder()
       .setName('unban')
-      .setDescription('Desbanear usuario (ID)')
+      .setDescription('Desbanear usuario')
       .addStringOption(o => o.setName('userid').setDescription('ID del usuario').setRequired(true))
       .addStringOption(o => o.setName('razon').setDescription('Razón').setRequired(false)),
 
@@ -199,53 +196,50 @@ client.on('interactionCreate', async (interaction) => {
 
   const cmd = interaction.commandName;
 
-  // Intento de Defer seguro
+  // Defer seguro
   try {
-     // Solo deferimos si NO ha sido diferido ya, para evitar doble llamada
      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
      }
   } catch (e) {
-     // Si falla el defer (lag o error), no detenemos el código, pero safeEditReply lo manejará luego
-     console.log(`Nota: Defer falló para ${cmd}, continuando...`);
+     console.log(`Nota: Defer falló para ${cmd} (posible lag), continuando...`);
   }
 
   try {
-    // ---------- ANUNCIO (TEXTO LIMPIO) ----------
+    // ---------- ANUNCIO (FIXED) ----------
     if (cmd === 'anuncio') {
       const msg = interaction.options.getString('mensaje');
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.ANUNCIOS).catch(() => null);
       
+      // BLINDAJE: Si el mensaje llega null, cancelamos antes de que explote
+      if (!msg) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío. Inténtalo de nuevo.' });
+
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.ANUNCIOS).catch(() => null);
       if (!ch) return safeEditReply(interaction, { content: '❌ No encuentro el canal de anuncios.' });
 
-      // Verificamos longitud por si acaso
       if (msg.length > 1900) {
-        return safeEditReply(interaction, { content: '⚠️ El mensaje es demasiado largo para Discord (máx 1900 caracteres en bloque).' });
+        return safeEditReply(interaction, { content: '⚠️ Mensaje muy largo (máx 1900 caracteres).' });
       }
 
-      await ch.send({
-        content: `@everyone\n\`\`\`text\n${msg}\n\`\`\``
-      }).catch(err => console.error("Error enviando al canal:", err));
-
-      return safeEditReply(interaction, { content: '✅ Anuncio enviado correctamente.' });
+      await ch.send({ content: `@everyone\n\`\`\`text\n${msg}\n\`\`\`` }).catch(() => {});
+      return safeEditReply(interaction, { content: '✅ Anuncio enviado.' });
     }
 
-    // ---------- NUEVO (TEXTO LIMPIO) ----------
+    // ---------- NUEVO (FIXED) ----------
     if (cmd === 'nuevo') {
       const msg = interaction.options.getString('mensaje');
+
+      // BLINDAJE: Protección contra null
+      if (!msg) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío.' });
+
       const ch = await client.channels.fetch(CONFIG.CHANNELS.NUEVO).catch(() => null);
-      
       if (!ch) return safeEditReply(interaction, { content: '❌ No encuentro el canal NUEVO.' });
 
       if (msg.length > 1900) {
-        return safeEditReply(interaction, { content: '⚠️ El mensaje es demasiado largo.' });
+        return safeEditReply(interaction, { content: '⚠️ Mensaje muy largo.' });
       }
 
-      await ch.send({
-        content: `@everyone\n\`\`\`text\n${msg}\n\`\`\``
-      }).catch(err => console.error("Error enviando al canal:", err));
-
-      return safeEditReply(interaction, { content: '✅ Mensaje enviado a NUEVO correctamente.' });
+      await ch.send({ content: `@everyone\n\`\`\`text\n${msg}\n\`\`\`` }).catch(() => {});
+      return safeEditReply(interaction, { content: '✅ Mensaje NUEVO enviado.' });
     }
 
     // ---------- BAN ----------
@@ -254,17 +248,14 @@ client.on('interactionCreate', async (interaction) => {
       const reason = interaction.options.getString('razon') || 'No especificada';
       const guild = interaction.guild;
       
-      try { 
-        if (guild) await guild.members.ban(target.id, { reason }); 
-      } catch (e) {
-        return safeEditReply(interaction, { content: '❌ No pude banear al usuario (¿Quizás tiene un rol superior al mío?).' });
-      }
+      try { if (guild) await guild.members.ban(target.id, { reason }); } 
+      catch (e) { return safeEditReply(interaction, { content: '❌ No pude banear (Faltan permisos).' }); }
 
-      const embed = makeModEmbed({ title: '🚫 Sanción Aplicada: Power Lucky', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason });
+      const embed = makeModEmbed({ title: '🚫 Sanción Aplicada', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason });
       const ch = await client.channels.fetch(CONFIG.CHANNELS.BANS).catch(()=>null);
       if (ch) await ch.send({ embeds: [embed] }).catch(()=>{});
       
-      return safeEditReply(interaction, { content: `🔨 **${target.tag}** ha sido baneado.` });
+      return safeEditReply(interaction, { content: `🔨 **${target.tag}** baneado.` });
     }
 
     // ---------- TEMPBAN ----------
@@ -275,30 +266,28 @@ client.on('interactionCreate', async (interaction) => {
       const guild = interaction.guild;
       const ms = parseTimeToMs(timeStr);
       
-      if (!ms) return safeEditReply(interaction, { content: '❌ Formato de tiempo inválido. Usa: 10s, 5m, 1h, 1d' });
+      if (!ms) return safeEditReply(interaction, { content: '❌ Tiempo inválido. Ej: 10s, 5m, 1h' });
 
-      try { if (guild) await guild.members.ban(target.id, { reason }); } catch (e) {
-         return safeEditReply(interaction, { content: '❌ No pude banear al usuario (permisos insuficientes).' });
-      }
+      try { if (guild) await guild.members.ban(target.id, { reason }); } 
+      catch (e) { return safeEditReply(interaction, { content: '❌ No pude banear (Faltan permisos).' }); }
 
       const embed = makeModEmbed({ title: '⏱️ Ban Temporal', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason, duration: timeStr, endsAt: Date.now() + ms });
       const chTemp = await client.channels.fetch(CONFIG.CHANNELS.TEMPBANS).catch(()=>null);
       if (chTemp) await chTemp.send({ embeds: [embed] }).catch(()=>{});
 
-      // schedule unban
       setTimeout(async () => {
         try {
           const mainGuild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID).catch(()=>null);
           if (mainGuild) await mainGuild.members.unban(target.id).catch(()=>{});
           const chUn = await client.channels.fetch(CONFIG.CHANNELS.UNBANS).catch(()=>null);
           if (chUn) {
-            const embedUn = makeModEmbed({ title: '🔓 Desbaneado (fin de tempban)', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: 'Sistema (temban)', reason: `Fin de tempban (${timeStr})` });
+            const embedUn = makeModEmbed({ title: '🔓 Fin de Tempban', userTag: `${target.tag}`, moderatorTag: 'Sistema', reason: `Expiró: ${timeStr}` });
             await chUn.send({ embeds: [embedUn] }).catch(()=>{});
           }
-        } catch (e) { console.error('Error en unban programado:', e); }
+        } catch (e) { console.error('Error en unban auto:', e); }
       }, ms);
 
-      return safeEditReply(interaction, { content: `⏱️ **${target.tag}** baneado temporalmente por ${timeStr}.` });
+      return safeEditReply(interaction, { content: `⏱️ **${target.tag}** baneado x ${timeStr}.` });
     }
 
     // ---------- UNBAN ----------
@@ -307,11 +296,8 @@ client.on('interactionCreate', async (interaction) => {
       const reason = interaction.options.getString('razon') || 'No especificada';
       const mainGuild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID).catch(()=>null);
       
-      try {
-        if (mainGuild) await mainGuild.members.unban(userId, reason);
-      } catch (e) {
-        return safeEditReply(interaction, { content: `❌ No se pudo desbanear al ID ${userId} (¿Es correcto o ya está desbaneado?).` });
-      }
+      try { if (mainGuild) await mainGuild.members.unban(userId, reason); } 
+      catch (e) { return safeEditReply(interaction, { content: `❌ No pude desbanear a ${userId}.` }); }
       
       const chUn = await client.channels.fetch(CONFIG.CHANNELS.UNBANS).catch(()=>null);
       if (chUn) {
@@ -327,7 +313,7 @@ client.on('interactionCreate', async (interaction) => {
       const dur = interaction.options.getString('duracion');
       const reason = interaction.options.getString('razon') || 'No especificada';
       const guild = interaction.guild;
-      if (!guild) return safeEditReply(interaction, { content: 'Comando solo para servidores.' });
+      if (!guild) return safeEditReply(interaction, { content: 'Solo en servidores.' });
 
       let mutedRole = guild.roles.cache.find(r => r.name === 'Muted');
       try { if (!mutedRole) mutedRole = await guild.roles.create({ name: 'Muted', permissions: [] }); } catch (e) {}
@@ -335,64 +321,54 @@ client.on('interactionCreate', async (interaction) => {
       try { 
           const member = await guild.members.fetch(target.id).catch(()=>null); 
           if (member) await member.roles.add(mutedRole);
-          else return safeEditReply(interaction, { content: '❌ El usuario no está en el servidor.' });
-      } catch (e) { return safeEditReply(interaction, { content: '❌ No puedo dar rol Muted (revisa mis permisos).' }); }
+          else return safeEditReply(interaction, { content: '❌ Usuario no está en el server.' });
+      } catch (e) { return safeEditReply(interaction, { content: '❌ No puedo dar rol Muted.' }); }
 
-      const embedMute = makeModEmbed({ title: '🔇 Usuario Silenciado', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason, duration: dur });
+      const embedMute = makeModEmbed({ title: '🔇 Silenciado', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason, duration: dur });
       const chMute = await client.channels.fetch(CONFIG.CHANNELS.MUTES).catch(()=>null);
       if (chMute) await chMute.send({ embeds: [embedMute] }).catch(()=>{});
 
       if (dur) {
         const ms = parseTimeToMs(dur);
-        if (!ms) return safeEditReply(interaction, { content: '❌ Tiempo inválido.' });
-        setTimeout(async () => {
-          try {
-            const guild2 = guild;
-            const member2 = await guild2.members.fetch(target.id).catch(()=>null);
-            if (member2 && mutedRole) await member2.roles.remove(mutedRole).catch(()=>{});
-            const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(()=>null);
-            if (chEnd) {
-              const embedEnd = makeModEmbed({ title: '🔊 Fin de Mute', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: 'Sistema', reason: `Expiró (${dur})` });
-              await chEnd.send({ embeds: [embedEnd] }).catch(()=>{});
-            }
-          } catch (e) {}
-        }, ms);
+        if (ms) {
+          setTimeout(async () => {
+            try {
+              const m = await guild.members.fetch(target.id).catch(()=>null);
+              if (m && mutedRole) await m.roles.remove(mutedRole).catch(()=>{});
+              const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(()=>null);
+              if (chEnd) await chEnd.send({ embeds: [makeModEmbed({ title: '🔊 Fin Mute', userTag: target.tag, moderatorTag: 'Sistema', reason: 'Tiempo' })] }).catch(()=>{});
+            } catch (e) {}
+          }, ms);
+        }
       }
-
-      return safeEditReply(interaction, { content: `🔇 **${target.tag}** ha sido silenciado.` });
+      return safeEditReply(interaction, { content: `🔇 **${target.tag}** silenciado.` });
     }
 
     // ---------- UNMUTE ----------
     if (cmd === 'unmute') {
       const target = interaction.options.getUser('usuario');
       const guild = interaction.guild;
-      if (!guild) return safeEditReply(interaction, { content: 'Error: Servidor no detectado.' });
+      if (!guild) return safeEditReply(interaction, { content: 'Solo en servidores.' });
       
       const mutedRole = guild.roles.cache.find(r => r.name === 'Muted');
-      if (!mutedRole) return safeEditReply(interaction, { content: '❌ No existe el rol "Muted".' });
-
       try {
         const member = await guild.members.fetch(target.id).catch(()=>null);
-        if (member) await member.roles.remove(mutedRole);
-        else return safeEditReply(interaction, { content: '❌ Usuario no encontrado en el servidor.' });
-      } catch (e) { return safeEditReply(interaction, { content: '❌ Error quitando rol (permisos).' }); }
+        if (member && mutedRole) await member.roles.remove(mutedRole);
+      } catch (e) { return safeEditReply(interaction, { content: '❌ Error quitando rol.' }); }
 
-      const chEnd2 = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(()=>null);
-      if (chEnd2) {
-        const embed = makeModEmbed({ title: '🔊 Usuario Desilenciado', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason: 'Manual' });
-        await chEnd2.send({ embeds: [embed] }).catch(()=>{});
-      }
-      return safeEditReply(interaction, { content: `🔊 **${target.tag}** ha sido desilenciado.` });
+      const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(()=>null);
+      if (chEnd) await chEnd.send({ embeds: [makeModEmbed({ title: '🔊 Desilenciado', userTag: target.tag, moderatorTag: interaction.user.tag, reason: 'Manual' })] }).catch(()=>{});
+      
+      return safeEditReply(interaction, { content: `🔊 **${target.tag}** desilenciado.` });
     }
 
   } catch (e) {
-    console.error('Error FATAL en comando:', e);
-    // Usamos el safeEditReply incluso en el catch final
-    await safeEditReply(interaction, { content: '❌ Ocurrió un error crítico ejecutando el comando.' });
+    console.error('Error FATAL ejecutando comando:', e);
+    await safeEditReply(interaction, { content: '❌ Error crítico en el bot.' });
   }
 });
 
-/* ───────── MENSAJES AUTOMÁTICOS ───────── */
+/* ───────── MENSAJES AUTO ───────── */
 client.on('messageCreate', async (message) => {
   if (!message.guild || message.author.bot) return;
   const content = message.content.toLowerCase();
@@ -427,28 +403,26 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-/* ───────── BIENVENIDAS Y DESPEDIDAS ───────── */
+/* ───────── BIENVENIDAS ───────── */
 client.on('guildMemberAdd', async (member) => {
   const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(()=>null);
-  if (!ch) return;
-  await ch.send({ embeds: [ makeWelcomeEmbed(member) ] }).catch(()=>{});
+  if (ch) await ch.send({ embeds: [ makeWelcomeEmbed(member) ] }).catch(()=>{});
 });
 
 client.on('guildMemberRemove', async (member) => {
   const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(()=>null);
-  if (!ch) return;
-  await ch.send({ embeds: [ makeLeaveEmbed(member) ] }).catch(()=>{});
+  if (ch) await ch.send({ embeds: [ makeLeaveEmbed(member) ] }).catch(()=>{});
 });
 
 /* ───────── LOGIN ───────── */
 if (!CONFIG.TOKEN) {
-  console.error('❌ TOKEN no definido en el archivo .env');
+  console.error('❌ TOKEN no definido en .env');
   process.exit(1);
 }
 client.login(CONFIG.TOKEN)
-  .then(()=>console.log('✅ Bot logueado y listo'))
-  .catch((e)=>{ console.error('Error al loguear el bot:', e); process.exit(1); });
+  .then(()=>console.log('✅ Bot Listo'))
+  .catch((e)=>{ console.error('Error login:', e); process.exit(1); });
 
-/* ───────── GLOBAL ERROR HANDLERS ───────── */
-process.on('unhandledRejection', (r,p) => console.error('UnhandledRejection', r));
-process.on('uncaughtException', err => console.error('UncaughtException', err));
+/* ───────── ERROR HANDLERS ───────── */
+process.on('unhandledRejection', (r) => console.error('Rejection:', r));
+process.on('uncaughtException', (e) => console.error('Exception:', e));
