@@ -63,14 +63,6 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-/* ───────── ANTI-RAID SIMPLE ───────── */
-const recentJoins = [];
-function registerJoinAndCheck() {
-  const now = Date.now();
-  recentJoins.push(now);
-  while (recentJoins.length && now - recentJoins[0] > CONFIG.RAID_PROTECT.WINDOW_MS) recentJoins.shift();
-  return recentJoins.length >= CONFIG.RAID_PROTECT.JOIN_LIMIT;
-}
 
 /* ───────── READY ───────── */
 client.once(Events.ClientReady, async () => {
@@ -242,10 +234,6 @@ client.on('messageCreate', async (message) => {
 /* ───────── BIENVENIDAS Y DESPEDIDAS ───────── */
 client.on('guildMemberAdd', async (member) => {
   try {
-    if (registerJoinAndCheck()) {
-      const logCh = findChannelByName(member.guild, CONFIG.CANALES.BANEOS);
-      if (logCh) logCh.send({ content: `⚠️ Posible raid detectado: ${member.user.tag}` }).catch(() => {});
-    }
     const ch = findChannelByName(member.guild, CONFIG.CANALES.BIENVENIDAS);
     if (!ch) return;
     const embed = new EmbedBuilder()
@@ -289,3 +277,4 @@ process.on('unhandledRejection', (reason, p) => {
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
 });
+
