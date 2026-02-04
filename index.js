@@ -1,4 +1,4 @@
-// index.js — Power Luki Network Bot COMPLETO (sin tickets ni XP)
+// index.js — Power Luki Network Bot CORREGIDO
 import 'dotenv/config';
 import express from 'express';
 import {
@@ -12,12 +12,13 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  InteractionType,
   ChannelType,
   PermissionsBitField,
   REST,
   Routes,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  Events,
+  ActivityType,
 } from 'discord.js';
 
 /* ───────── CONFIGURACIÓN ───────── */
@@ -39,17 +40,23 @@ const CONFIG = {
   RAID_PROTECT: { WINDOW_MS: 30_000, JOIN_LIMIT: 5 }
 };
 
+/* ───────── Comprobación TOKEN ───────── */
+if (!process.env.TOKEN) {
+  console.error('❌ ERROR: process.env.TOKEN no está definido. Añade TOKEN en tu .env o en las variables de entorno del hosting.');
+  process.exit(1);
+}
+
 /* ───────── EXPRESS SERVER ───────── */
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (_, res) => res.send(`🤖 Bot Power Luki: ${client?.ws?.status === 0 ? 'ONLINE' : 'CONECTANDO...'}`));
-app.listen(PORT, () => console.log(`🌐 Web server escuchando en ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Web server escuchando en ${PORT} — PID ${process.pid}`));
 
 /* ───────── CLIENT ───────── */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMembers, // requiere Intent en Dev Portal si usas fetch de miembros
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
   ],
@@ -66,9 +73,13 @@ function registerJoinAndCheck() {
 }
 
 /* ───────── READY ───────── */
-client.once('ready', async () => {
-  console.log(`🤖 Bot conectado como ${client.user.tag}`);
-  client.user.setActivity('Power Luki Network', { type: 4 });
+client.once(Events.ClientReady, async () => {
+  console.log(`🤖 Bot conectado como ${client.user.tag} (PID ${process.pid})`);
+  try {
+    await client.user.setActivity('Power Luki Network', { type: ActivityType.Playing });
+  } catch (e) {
+    console.warn('No se pudo establecer la actividad:', e);
+  }
 
   /* ─── Slash commands ─── */
   const commands = [
@@ -108,8 +119,14 @@ client.once('ready', async () => {
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: commands }).catch(console.error);
-  console.log('✅ Slash commands registrados.');
+
+  try {
+    const appId = client.application?.id ?? client.user.id;
+    await rest.put(Routes.applicationCommands(appId), { body: commands });
+    console.log('✅ Slash commands registrados.');
+  } catch (err) {
+    console.error('❌ Error registrando slash commands:', err);
+  }
 });
 
 /* ───────── UTILIDADES ───────── */
@@ -138,16 +155,16 @@ client.on('interactionCreate', async (interaction) => {
       const mutedRole = guild.roles.cache.find(r => r.name === 'Muted') || await guild.roles.create({ name: 'Muted', permissions: [] });
       const gMember = await guild.members.fetch(target.id);
       await gMember.roles.add(mutedRole);
-      await interaction.reply({ content: `🔇 ${target.tag} ha sido silenciado${duration ? ` por ${duration}` : ''}.` });
+      await interaction.reply({ content: `🔇 ${target.tag} ha sido silenciado${duration ? ` por ${duration}` : ''}.`, flags: 64 });
     }
 
     if (commandName === 'unmute') {
       const target = interaction.options.getUser('usuario');
       const mutedRole = guild.roles.cache.find(r => r.name === 'Muted');
-      if (!mutedRole) return interaction.reply({ content: 'No hay rol Muted creado.' });
+      if (!mutedRole) return interaction.reply({ content: 'No hay rol Muted creado.', flags: 64 });
       const gMember = await guild.members.fetch(target.id);
       await gMember.roles.remove(mutedRole);
-      await interaction.reply({ content: `🔊 ${target.tag} ha sido des-silenciado.` });
+      await interaction.reply({ content: `🔊 ${target.tag} ha sido des-silenciado.`, flags: 64 });
     }
 
     if (commandName === 'ban') {
@@ -155,7 +172,7 @@ client.on('interactionCreate', async (interaction) => {
       const reason = interaction.options.getString('razon') || 'No especificada';
       const gMember = await guild.members.fetch(target.id);
       await gMember.ban({ reason });
-      await interaction.reply({ content: `🔨 ${target.tag} ha sido baneado.\nRazón: ${reason}` });
+      await interaction.reply({ content: `🔨 ${target.tag} ha sido baneado.\nRazón: ${reason}`, flags: 64 });
     }
 
     if (commandName === 'temban') {
@@ -164,7 +181,7 @@ client.on('interactionCreate', async (interaction) => {
       const reason = interaction.options.getString('razon') || 'No especificada';
       const gMember = await guild.members.fetch(target.id);
       await gMember.ban({ reason });
-      await interaction.reply({ content: `⏱️ ${target.tag} baneado temporalmente por ${timeStr}.\nRazón: ${reason}` });
+      await interaction.reply({ content: `⏱️ ${target.tag} baneado temporalmente por ${timeStr}.\nRazón: ${reason}`, flags: 64 });
       const ms = parseTimeToMs(timeStr);
       if (ms) setTimeout(async () => { try { await guild.members.unban(target.id); } catch {} }, ms);
     }
@@ -172,26 +189,29 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'warn') {
       const target = interaction.options.getUser('usuario');
       const reason = interaction.options.getString('razon');
-      await interaction.reply({ content: `⚠️ ${target.tag} ha sido advertido.\nRazón: ${reason}` });
+      await interaction.reply({ content: `⚠️ ${target.tag} ha sido advertido.\nRazón: ${reason}`, flags: 64 });
     }
 
     if (commandName === 'anuncio') {
       const msg = interaction.options.getString('mensaje');
       const ch = findChannelByName(guild, CONFIG.CANALES.ANUNCIOS);
-      if (!ch) return interaction.reply({ content: 'Canal de anuncios no encontrado.' });
+      if (!ch) return interaction.reply({ content: 'Canal de anuncios no encontrado.', flags: 64 });
       const embed = new EmbedBuilder().setTitle('📣 Anuncio').setDescription(msg).setColor('Yellow');
       await ch.send({ embeds: [embed] });
-      await interaction.reply({ content: 'Anuncio enviado ✅', ephemeral: true });
+      await interaction.reply({ content: 'Anuncio enviado ✅', flags: 64 });
     }
 
     if (commandName === 'nuevo') {
       const msg = interaction.options.getString('mensaje');
       const ch = findChannelByName(guild, CONFIG.CANALES.BIENVENIDAS);
-      if (!ch) return interaction.reply({ content: 'Canal NUEVO no encontrado.' });
+      if (!ch) return interaction.reply({ content: 'Canal NUEVO no encontrado.', flags: 64 });
       await ch.send({ content: msg });
-      await interaction.reply({ content: 'Mensaje enviado ✅', ephemeral: true });
+      await interaction.reply({ content: 'Mensaje enviado ✅', flags: 64 });
     }
-  } catch (e) { console.error(e); interaction.reply({ content: '❌ Error ejecutando comando', ephemeral: true }); }
+  } catch (e) { 
+    console.error('Error en interaction handler:', e); 
+    try { await interaction.reply({ content: '❌ Error ejecutando comando', flags: 64 }); } catch (e2) { console.error('No se pudo enviar reply de error:', e2); }
+  }
 });
 
 /* ───────── MENSAJES AUTOMÁTICOS ───────── */
@@ -220,30 +240,51 @@ client.on('messageCreate', async (message) => {
 
 /* ───────── BIENVENIDAS Y DESPEDIDAS ───────── */
 client.on('guildMemberAdd', async (member) => {
-  if (registerJoinAndCheck()) {
-    const logCh = findChannelByName(member.guild, CONFIG.CANALES.BANEOS);
-    if (logCh) logCh.send({ content: `⚠️ Posible raid detectado: ${member.user.tag}` }).catch(() => {});
+  try {
+    if (registerJoinAndCheck()) {
+      const logCh = findChannelByName(member.guild, CONFIG.CANALES.BANEOS);
+      if (logCh) logCh.send({ content: `⚠️ Posible raid detectado: ${member.user.tag}` }).catch(() => {});
+    }
+    const ch = findChannelByName(member.guild, CONFIG.CANALES.BIENVENIDAS);
+    if (!ch) return;
+    const embed = new EmbedBuilder()
+      .setTitle(`✨ ¡Bienvenido/a ${member.user.username}!`)
+      .setDescription(`Bienvenido a **Power Luki Network**.`)
+      .setThumbnail(member.user.displayAvatarURL())
+      .setColor('Green');
+    ch.send({ embeds: [embed] }).catch(() => {});
+  } catch (e) {
+    console.error('Error en guildMemberAdd:', e);
   }
-  const ch = findChannelByName(member.guild, CONFIG.CANALES.BIENVENIDAS);
-  if (!ch) return;
-  const embed = new EmbedBuilder()
-    .setTitle(`✨ ¡Bienvenido/a ${member.user.username}!`)
-    .setDescription(`Bienvenido a **Power Luki Network**.`)
-    .setThumbnail(member.user.displayAvatarURL())
-    .setColor('Green');
-  ch.send({ embeds: [embed] }).catch(() => {});
 });
 
 client.on('guildMemberRemove', async (member) => {
-  const ch = findChannelByName(member.guild, CONFIG.CANALES.DESPEDIDAS);
-  if (!ch) return;
-  const embed = new EmbedBuilder()
-    .setTitle(`😔 Hasta luego ${member.user.username}`)
-    .setDescription(`Esperamos verte pronto de nuevo.`)
-    .setThumbnail(member.user.displayAvatarURL())
-    .setColor('Red');
-  ch.send({ embeds: [embed] }).catch(() => {});
+  try {
+    const ch = findChannelByName(member.guild, CONFIG.CANALES.DESPEDIDAS);
+    if (!ch) return;
+    const embed = new EmbedBuilder()
+      .setTitle(`😔 Hasta luego ${member.user.username}`)
+      .setDescription(`Esperamos verte pronto de nuevo.`)
+      .setThumbnail(member.user.displayAvatarURL())
+      .setColor('Red');
+    ch.send({ embeds: [embed] }).catch(() => {});
+  } catch (e) {
+    console.error('Error en guildMemberRemove:', e);
+  }
 });
 
 /* ───────── LOGIN ───────── */
-client.login(process.env.TOKEN).then(() => console.log('✅ Token detectado y bot logueado')).catch(console.error);
+client.login(process.env.TOKEN)
+  .then(() => console.log('✅ Token detectado y bot logueado'))
+  .catch((err) => {
+    console.error('❌ Error al loguear el bot:', err);
+    process.exit(1);
+  });
+
+/* ───────── HARDENED LOGS / ERR HANDLING ───────── */
+process.on('unhandledRejection', (reason, p) => {
+  console.error('Unhandled Rejection at:', p, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
