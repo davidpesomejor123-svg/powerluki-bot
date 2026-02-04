@@ -1,4 +1,3 @@
-// index.js — Power Luki Network Bot (Versión Final Blindada)
 import 'dotenv/config';
 import express from 'express';
 import {
@@ -71,19 +70,30 @@ function formatDateTime(dateOrMs) {
 }
 
 // FUNCIÓN CORREGIDA PARA EVITAR WARNINGS Y ERRORES DE INTERACCIÓN
-async function safeEditReply(interaction, data) {
+async function safeEditReply(interaction, data = {}) {
   try {
-    // Si ya respondimos o diferimos, usamos editReply (sin flags, porque no se pueden cambiar después)
+    // Normalizamos: si el usuario mandó { ephemeral: true } lo convertimos a flags
+    const { ephemeral, flags, ...cleanData } = data;
+    const replyOptions = { ...cleanData };
+    if (ephemeral) replyOptions.flags = 64;
+
     if (interaction.deferred || interaction.replied) {
-      // Limpiamos 'ephemeral' o 'flags' de la data si existen, para que no de warning al editar
-      const { ephemeral, flags, ...cleanData } = data;
-      return await interaction.editReply(cleanData);
+      // Intentamos editar; algunos errores de Discord dicen "already acknowledged" — los ignoramos silenciosamente
+      return await interaction.editReply(replyOptions).catch((err) => {
+        if (!/already been acknowledged/i.test(err?.message || '')) {
+          console.error('⚠️ Error al editar reply:', err);
+        }
+      });
     } else {
-      // Si es la primera respuesta, usamos reply con flags 64 (mensaje oculto/ephemeral)
-      return await interaction.reply({ ...data, flags: 64 });
+      // Primera respuesta. Usamos reply (podemos usar ephemeral si se pidió)
+      return await interaction.reply(replyOptions).catch((err) => {
+        if (!/already been acknowledged/i.test(err?.message || '')) {
+          console.error('⚠️ Error al reply:', err);
+        }
+      });
     }
   } catch (e) {
-    console.error('⚠️ Error al responder interacción:', e.message);
+    console.error('⚠️ Error al responder interacción:', e);
   }
 }
 
@@ -192,26 +202,28 @@ client.once(Events.ClientReady, async () => {
 
 /* ───────── INTERACTION HANDLER ───────── */
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand?.()) return;
 
   const cmd = interaction.commandName;
 
-  // Defer seguro
+  // Defer seguro (ignoramos errores si Discord ya respondió)
   try {
-     if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ flags: 64 });
-     }
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({ flags: 64 }).catch((e) => {
+        console.log(`Nota: Defer falló para ${cmd} (posible lag), continuando...`);
+      });
+    }
   } catch (e) {
-     console.log(`Nota: Defer falló para ${cmd} (posible lag), continuando...`);
+    console.log(`Nota: Error intentando defer para ${cmd}:`, e?.message || e);
   }
 
   try {
     // ---------- ANUNCIO (FIXED) ----------
     if (cmd === 'anuncio') {
-      const msg = interaction.options.getString('mensaje');
-      
-      // BLINDAJE: Si el mensaje llega null, cancelamos antes de que explote
-      if (!msg) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío. Inténtalo de nuevo.' });
+      const msg = interaction.options.getString('mensaje') ?? '';
+
+      // BLINDAJE: Si el mensaje llega vacío, cancelamos antes de que explote
+      if (!msg || msg.length === 0) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío.' });
 
       const ch = await client.channels.fetch(CONFIG.CHANNELS.ANUNCIOS).catch(() => null);
       if (!ch) return safeEditReply(interaction, { content: '❌ No encuentro el canal de anuncios.' });
@@ -226,10 +238,9 @@ client.on('interactionCreate', async (interaction) => {
 
     // ---------- NUEVO (FIXED) ----------
     if (cmd === 'nuevo') {
-      const msg = interaction.options.getString('mensaje');
+      const msg = interaction.options.getString('mensaje') ?? '';
 
-      // BLINDAJE: Protección contra null
-      if (!msg) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío.' });
+      if (!msg || msg.length === 0) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío.' });
 
       const ch = await client.channels.fetch(CONFIG.CHANNELS.NUEVO).catch(() => null);
       if (!ch) return safeEditReply(interaction, { content: '❌ No encuentro el canal NUEVO.' });
@@ -245,44 +256,50 @@ client.on('interactionCreate', async (interaction) => {
     // ---------- BAN ----------
     if (cmd === 'ban') {
       const target = interaction.options.getUser('usuario');
+      if (!target) return safeEditReply(interaction, { content: '❌ Usuario no encontrado.' });
       const reason = interaction.options.getString('razon') || 'No especificada';
       const guild = interaction.guild;
-      
-      try { if (guild) await guild.members.ban(target.id, { reason }); } 
-      catch (e) { return safeEditReply(interaction, { content: '❌ No pude banear (Faltan permisos).' }); }
+
+      try {
+        if (guild) await guild.members.ban(target.id, { reason });
+      }
+      catch (e) {
+        return safeEditReply(interaction, { content: '❌ No pude banear (Faltan permisos o error).' });
+      }
 
       const embed = makeModEmbed({ title: '🚫 Sanción Aplicada', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason });
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.BANS).catch(()=>null);
-      if (ch) await ch.send({ embeds: [embed] }).catch(()=>{});
-      
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.BANS).catch(() => null);
+      if (ch) await ch.send({ embeds: [embed] }).catch(() => {});
+
       return safeEditReply(interaction, { content: `🔨 **${target.tag}** baneado.` });
     }
 
     // ---------- TEMPBAN ----------
     if (cmd === 'temban') {
       const target = interaction.options.getUser('usuario');
+      if (!target) return safeEditReply(interaction, { content: '❌ Usuario no encontrado.' });
       const timeStr = interaction.options.getString('tiempo');
       const reason = interaction.options.getString('razon') || 'No especificada';
       const guild = interaction.guild;
       const ms = parseTimeToMs(timeStr);
-      
+
       if (!ms) return safeEditReply(interaction, { content: '❌ Tiempo inválido. Ej: 10s, 5m, 1h' });
 
-      try { if (guild) await guild.members.ban(target.id, { reason }); } 
-      catch (e) { return safeEditReply(interaction, { content: '❌ No pude banear (Faltan permisos).' }); }
+      try { if (guild) await guild.members.ban(target.id, { reason }); }
+      catch (e) { return safeEditReply(interaction, { content: '❌ No pude banear (Faltan permisos o error).' }); }
 
       const embed = makeModEmbed({ title: '⏱️ Ban Temporal', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason, duration: timeStr, endsAt: Date.now() + ms });
-      const chTemp = await client.channels.fetch(CONFIG.CHANNELS.TEMPBANS).catch(()=>null);
-      if (chTemp) await chTemp.send({ embeds: [embed] }).catch(()=>{});
+      const chTemp = await client.channels.fetch(CONFIG.CHANNELS.TEMPBANS).catch(() => null);
+      if (chTemp) await chTemp.send({ embeds: [embed] }).catch(() => {});
 
       setTimeout(async () => {
         try {
-          const mainGuild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID).catch(()=>null);
-          if (mainGuild) await mainGuild.members.unban(target.id).catch(()=>{});
-          const chUn = await client.channels.fetch(CONFIG.CHANNELS.UNBANS).catch(()=>null);
+          const mainGuild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID).catch(() => null);
+          if (mainGuild) await mainGuild.members.unban(target.id).catch(() => {});
+          const chUn = await client.channels.fetch(CONFIG.CHANNELS.UNBANS).catch(() => null);
           if (chUn) {
             const embedUn = makeModEmbed({ title: '🔓 Fin de Tempban', userTag: `${target.tag}`, moderatorTag: 'Sistema', reason: `Expiró: ${timeStr}` });
-            await chUn.send({ embeds: [embedUn] }).catch(()=>{});
+            await chUn.send({ embeds: [embedUn] }).catch(() => {});
           }
         } catch (e) { console.error('Error en unban auto:', e); }
       }, ms);
@@ -293,16 +310,17 @@ client.on('interactionCreate', async (interaction) => {
     // ---------- UNBAN ----------
     if (cmd === 'unban') {
       const userId = interaction.options.getString('userid');
+      if (!userId) return safeEditReply(interaction, { content: '❌ ID inválida.' });
       const reason = interaction.options.getString('razon') || 'No especificada';
-      const mainGuild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID).catch(()=>null);
-      
-      try { if (mainGuild) await mainGuild.members.unban(userId, reason); } 
+      const mainGuild = await client.guilds.fetch(CONFIG.MAIN_GUILD_ID).catch(() => null);
+
+      try { if (mainGuild) await mainGuild.members.unban(userId, reason); }
       catch (e) { return safeEditReply(interaction, { content: `❌ No pude desbanear a ${userId}.` }); }
-      
-      const chUn = await client.channels.fetch(CONFIG.CHANNELS.UNBANS).catch(()=>null);
+
+      const chUn = await client.channels.fetch(CONFIG.CHANNELS.UNBANS).catch(() => null);
       if (chUn) {
         const embedUn = makeModEmbed({ title: '🔓 Desbaneado', userTag: `${userId}`, moderatorTag: interaction.user.tag, reason });
-        await chUn.send({ embeds: [embedUn] }).catch(()=>{});
+        await chUn.send({ embeds: [embedUn] }).catch(() => {});
       }
       return safeEditReply(interaction, { content: `🔓 Usuario ${userId} desbaneado.` });
     }
@@ -310,34 +328,35 @@ client.on('interactionCreate', async (interaction) => {
     // ---------- MUTE ----------
     if (cmd === 'mute') {
       const target = interaction.options.getUser('usuario');
+      if (!target) return safeEditReply(interaction, { content: '❌ Usuario no encontrado.' });
       const dur = interaction.options.getString('duracion');
       const reason = interaction.options.getString('razon') || 'No especificada';
       const guild = interaction.guild;
       if (!guild) return safeEditReply(interaction, { content: 'Solo en servidores.' });
 
       let mutedRole = guild.roles.cache.find(r => r.name === 'Muted');
-      try { if (!mutedRole) mutedRole = await guild.roles.create({ name: 'Muted', permissions: [] }); } catch (e) {}
+      try { if (!mutedRole) mutedRole = await guild.roles.create({ name: 'Muted', permissions: [] }); } catch (e) { console.warn('No se pudo crear rol Muted:', e?.message || e); }
 
-      try { 
-          const member = await guild.members.fetch(target.id).catch(()=>null); 
-          if (member) await member.roles.add(mutedRole);
-          else return safeEditReply(interaction, { content: '❌ Usuario no está en el server.' });
+      try {
+        const member = await guild.members.fetch(target.id).catch(() => null);
+        if (member && mutedRole) await member.roles.add(mutedRole).catch(() => {});
+        else return safeEditReply(interaction, { content: '❌ Usuario no está en el server.' });
       } catch (e) { return safeEditReply(interaction, { content: '❌ No puedo dar rol Muted.' }); }
 
       const embedMute = makeModEmbed({ title: '🔇 Silenciado', userTag: `${target.tag} (<@${target.id}>)`, moderatorTag: interaction.user.tag, reason, duration: dur });
-      const chMute = await client.channels.fetch(CONFIG.CHANNELS.MUTES).catch(()=>null);
-      if (chMute) await chMute.send({ embeds: [embedMute] }).catch(()=>{});
+      const chMute = await client.channels.fetch(CONFIG.CHANNELS.MUTES).catch(() => null);
+      if (chMute) await chMute.send({ embeds: [embedMute] }).catch(() => {});
 
       if (dur) {
         const ms = parseTimeToMs(dur);
         if (ms) {
           setTimeout(async () => {
             try {
-              const m = await guild.members.fetch(target.id).catch(()=>null);
-              if (m && mutedRole) await m.roles.remove(mutedRole).catch(()=>{});
-              const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(()=>null);
-              if (chEnd) await chEnd.send({ embeds: [makeModEmbed({ title: '🔊 Fin Mute', userTag: target.tag, moderatorTag: 'Sistema', reason: 'Tiempo' })] }).catch(()=>{});
-            } catch (e) {}
+              const m = await guild.members.fetch(target.id).catch(() => null);
+              if (m && mutedRole) await m.roles.remove(mutedRole).catch(() => {});
+              const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(() => null);
+              if (chEnd) await chEnd.send({ embeds: [makeModEmbed({ title: '🔊 Fin Mute', userTag: target.tag, moderatorTag: 'Sistema', reason: 'Tiempo' })] }).catch(() => {});
+            } catch (e) { console.error('Error quitando mute automatico:', e); }
           }, ms);
         }
       }
@@ -347,18 +366,19 @@ client.on('interactionCreate', async (interaction) => {
     // ---------- UNMUTE ----------
     if (cmd === 'unmute') {
       const target = interaction.options.getUser('usuario');
+      if (!target) return safeEditReply(interaction, { content: '❌ Usuario no encontrado.' });
       const guild = interaction.guild;
       if (!guild) return safeEditReply(interaction, { content: 'Solo en servidores.' });
-      
+
       const mutedRole = guild.roles.cache.find(r => r.name === 'Muted');
       try {
-        const member = await guild.members.fetch(target.id).catch(()=>null);
-        if (member && mutedRole) await member.roles.remove(mutedRole);
+        const member = await guild.members.fetch(target.id).catch(() => null);
+        if (member && mutedRole) await member.roles.remove(mutedRole).catch(() => {});
       } catch (e) { return safeEditReply(interaction, { content: '❌ Error quitando rol.' }); }
 
-      const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(()=>null);
-      if (chEnd) await chEnd.send({ embeds: [makeModEmbed({ title: '🔊 Desilenciado', userTag: target.tag, moderatorTag: interaction.user.tag, reason: 'Manual' })] }).catch(()=>{});
-      
+      const chEnd = await client.channels.fetch(CONFIG.CHANNELS.MUTE_END).catch(() => null);
+      if (chEnd) await chEnd.send({ embeds: [makeModEmbed({ title: '🔊 Desilenciado', userTag: target.tag, moderatorTag: interaction.user.tag, reason: 'Manual' })] }).catch(() => {});
+
       return safeEditReply(interaction, { content: `🔊 **${target.tag}** desilenciado.` });
     }
 
@@ -384,7 +404,7 @@ client.on('messageCreate', async (message) => {
 ;   ESTADO: ONLINE  ;  VER: 1.21.x    ;
 . _ . ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ . _ .
 `;
-    return message.channel.send({ content: `\`\`\`text\n${ipMsg}\n\`\`\`` }).catch(()=>{});
+    return message.channel.send({ content: `\`\`\`text\n${ipMsg}\n\`\`\`` }).catch(() => {});
   }
 
   if (content.includes('!tienda') || content.includes('tienda')) {
@@ -399,19 +419,19 @@ client.on('messageCreate', async (message) => {
  ;  _ Rangos, Llaves y Beneficios _   ;
 .......................................
 `;
-    return message.channel.send({ content: `\`\`\`text\n${shopMsg}\n\`\`\`` }).catch(()=>{});
+    return message.channel.send({ content: `\`\`\`text\n${shopMsg}\n\`\`\`` }).catch(() => {});
   }
 });
 
 /* ───────── BIENVENIDAS ───────── */
 client.on('guildMemberAdd', async (member) => {
-  const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(()=>null);
-  if (ch) await ch.send({ embeds: [ makeWelcomeEmbed(member) ] }).catch(()=>{});
+  const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
+  if (ch) await ch.send({ embeds: [makeWelcomeEmbed(member)] }).catch(() => {});
 });
 
 client.on('guildMemberRemove', async (member) => {
-  const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(()=>null);
-  if (ch) await ch.send({ embeds: [ makeLeaveEmbed(member) ] }).catch(()=>{});
+  const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(() => null);
+  if (ch) await ch.send({ embeds: [makeLeaveEmbed(member)] }).catch(() => {});
 });
 
 /* ───────── LOGIN ───────── */
@@ -420,8 +440,8 @@ if (!CONFIG.TOKEN) {
   process.exit(1);
 }
 client.login(CONFIG.TOKEN)
-  .then(()=>console.log('✅ Bot Listo'))
-  .catch((e)=>{ console.error('Error login:', e); process.exit(1); });
+  .then(() => console.log('✅ Bot Listo'))
+  .catch((e) => { console.error('Error login:', e); process.exit(1); });
 
 /* ───────── ERROR HANDLERS ───────── */
 process.on('unhandledRejection', (r) => console.error('Rejection:', r));
