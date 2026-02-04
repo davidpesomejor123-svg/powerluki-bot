@@ -1,4 +1,4 @@
-// index.js — Power Luki Network Bot CORREGIDO
+// index.js — Power Luki Network Bot CORREGIDO (SLASH OPTIONS DESCRIPTIONS)
 import 'dotenv/config';
 import express from 'express';
 import {
@@ -56,7 +56,7 @@ app.listen(PORT, () => console.log(`🌐 Web server escuchando en ${PORT} — PI
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers, // requiere Intent en Dev Portal si usas fetch de miembros
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
   ],
@@ -75,47 +75,49 @@ function registerJoinAndCheck() {
 /* ───────── READY ───────── */
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Bot conectado como ${client.user.tag} (PID ${process.pid})`);
-  try {
-    await client.user.setActivity('Power Luki Network', { type: ActivityType.Playing });
-  } catch (e) {
-    console.warn('No se pudo establecer la actividad:', e);
-  }
+  try { await client.user.setActivity('Power Luki Network', { type: ActivityType.Playing }); } catch (e) { console.warn('No se pudo establecer la actividad:', e); }
 
   /* ─── Slash commands ─── */
   const commands = [
     new SlashCommandBuilder()
       .setName('mute')
       .setDescription('Silenciar un usuario')
-      .addUserOption(o => o.setName('usuario').setRequired(true))
-      .addStringOption(o => o.setName('duracion')),
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
+      .addStringOption(o => o.setName('duracion').setDescription('Duración del mute (ej: 10m, 2h)').setRequired(false)),
+
     new SlashCommandBuilder()
       .setName('unmute')
       .setDescription('Des-silenciar un usuario')
-      .addUserOption(o => o.setName('usuario').setRequired(true)),
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a des-silenciar').setRequired(true)),
+
     new SlashCommandBuilder()
       .setName('ban')
       .setDescription('Banear usuario')
-      .addUserOption(o => o.setName('usuario').setRequired(true))
-      .addStringOption(o => o.setName('razon')),
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Razón del baneo').setRequired(false)),
+
     new SlashCommandBuilder()
       .setName('temban')
       .setDescription('Ban temporal')
-      .addUserOption(o => o.setName('usuario').setRequired(true))
-      .addStringOption(o => o.setName('tiempo').setRequired(true))
-      .addStringOption(o => o.setName('razon')),
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear temporalmente').setRequired(true))
+      .addStringOption(o => o.setName('tiempo').setDescription('Tiempo (ej: 1d, 3h)').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Razón del baneo').setRequired(false)),
+
     new SlashCommandBuilder()
       .setName('warn')
       .setDescription('Advertir a un usuario')
-      .addUserOption(o => o.setName('usuario').setRequired(true))
-      .addStringOption(o => o.setName('razon').setRequired(true)),
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a advertir').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Razón de la advertencia').setRequired(true)),
+
     new SlashCommandBuilder()
       .setName('nuevo')
       .setDescription('Enviar mensaje al canal NUEVO')
-      .addStringOption(o => o.setName('mensaje').setRequired(true)),
+      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del mensaje a enviar').setRequired(true)),
+
     new SlashCommandBuilder()
       .setName('anuncio')
       .setDescription('Enviar anuncio al canal ANUNCIOS')
-      .addStringOption(o => o.setName('mensaje').setRequired(true))
+      .addStringOption(o => o.setName('mensaje').setDescription('Contenido del anuncio').setRequired(true))
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -146,7 +148,6 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const { commandName } = interaction;
   const guild = interaction.guild;
-  const member = interaction.member;
 
   try {
     if (commandName === 'mute') {
@@ -208,8 +209,8 @@ client.on('interactionCreate', async (interaction) => {
       await ch.send({ content: msg });
       await interaction.reply({ content: 'Mensaje enviado ✅', flags: 64 });
     }
-  } catch (e) { 
-    console.error('Error en interaction handler:', e); 
+  } catch (e) {
+    console.error('Error en interaction handler:', e);
     try { await interaction.reply({ content: '❌ Error ejecutando comando', flags: 64 }); } catch (e2) { console.error('No se pudo enviar reply de error:', e2); }
   }
 });
