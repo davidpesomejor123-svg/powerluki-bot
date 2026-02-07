@@ -142,7 +142,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     /* ENVÍO */
     try {
       await canal.send({
-        content: `@everyone\n\`\`\`text\n${mensaje}\n\`\`\``
+        content: `@everyone\n${mensaje}`
       });
 
       console.log('✅ Anuncio enviado correctamente');
@@ -189,3 +189,4 @@ client.on('guildMemberRemove', async (m) => {
 
 /* ───────── LOGIN ───────── */
 client.login(CONFIG.TOKEN);
+
