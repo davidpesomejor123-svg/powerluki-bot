@@ -4,7 +4,6 @@ import {
   Client,
   GatewayIntentBits,
   Partials,
-  EmbedBuilder,
   SlashCommandBuilder,
   REST,
   Routes,
@@ -58,8 +57,8 @@ client.once(Events.ClientReady, async () => {
       .setDescription('Enviar anuncio oficial')
       .addStringOption(o =>
         o.setName('mensaje')
-         .setDescription('Mensaje del anuncio')
-         .setRequired(true)
+          .setDescription('Usa DOBLE ESPACIO para salto de línea')
+          .setRequired(true)
       ),
 
     new SlashCommandBuilder()
@@ -67,8 +66,8 @@ client.once(Events.ClientReady, async () => {
       .setDescription('Enviar novedad')
       .addStringOption(o =>
         o.setName('mensaje')
-         .setDescription('Mensaje de la novedad')
-         .setRequired(true)
+          .setDescription('Usa DOBLE ESPACIO para salto de línea')
+          .setRequired(true)
       )
   ].map(c => c.toJSON());
 
@@ -97,49 +96,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (commandName === 'anuncio' || commandName === 'nuevo') {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`📢 Comando recibido: /${commandName}`);
-    console.log('📦 Opciones crudas:', interaction.options.data);
+    console.log('📦 Opciones:', interaction.options.data);
 
-    const mensaje = options.getString('mensaje');
+    let mensaje = options.getString('mensaje');
 
-    console.log('📝 Mensaje recibido:', mensaje);
+    console.log('📝 Mensaje original:', mensaje);
 
     await interaction.deferReply({ ephemeral: true });
 
-    /* VALIDACIÓN */
     if (!mensaje || mensaje.trim().length === 0) {
       console.log('❌ BLOQUEADO: mensaje vacío');
       return interaction.editReply('❌ El mensaje no puede estar vacío.');
     }
+
+    /* 🔥 FIX DEFINITIVO
+       2 o más espacios = salto de línea */
+    mensaje = mensaje
+      .replace(/\s{2,}/g, '\n')
+      .trim();
+
+    console.log('🛠️ Mensaje procesado:\n' + mensaje);
 
     const canalId =
       commandName === 'anuncio'
         ? CONFIG.CHANNELS.ANUNCIOS
         : CONFIG.CHANNELS.NUEVO;
 
-    const canal = await client.channels.fetch(canalId).catch(e => {
-      console.error('❌ Canal no encontrado:', e.message);
-      return null;
-    });
+    const canal = await client.channels.fetch(canalId).catch(() => null);
 
     if (!canal) {
       console.log('❌ BLOQUEADO: canal inválido');
       return interaction.editReply('❌ No se encontró el canal configurado.');
     }
 
-    /* PERMISOS */
     const permisos = canal.permissionsFor(client.user);
     if (
       !permisos ||
       !permisos.has([
-        PermissionsBitField.Flags.SendMessages,
-        PermissionsBitField.Flags.ViewChannel
+        PermissionsBitField.Flags.ViewChannel,
+        PermissionsBitField.Flags.SendMessages
       ])
     ) {
       console.log('❌ BLOQUEADO: permisos insuficientes');
       return interaction.editReply('❌ No tengo permisos para enviar mensajes en ese canal.');
     }
 
-    /* ENVÍO */
     try {
       await canal.send({
         content: `@everyone\n${mensaje}`
@@ -163,13 +164,13 @@ client.on('messageCreate', async (message) => {
 
   if (c === 'ip' || c === '!ip') {
     return message.channel.send(
-      `\`\`\`text\nIP DEL SERVIDOR:\n${CONFIG.SERVER_IP}\n\`\`\``
+      `IP DEL SERVIDOR:\n${CONFIG.SERVER_IP}`
     );
   }
 
   if (c === 'tienda' || c === '!tienda') {
     return message.channel.send(
-      `\`\`\`text\nTIENDA OFICIAL:\nhttps://tienda.tuservidor.com\n\`\`\``
+      `TIENDA OFICIAL:\nhttps://tienda.tuservidor.com`
     );
   }
 });
@@ -189,4 +190,3 @@ client.on('guildMemberRemove', async (m) => {
 
 /* ───────── LOGIN ───────── */
 client.login(CONFIG.TOKEN);
-
