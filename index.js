@@ -13,7 +13,6 @@ import {
 } from 'discord.js';
 
 /* ───────── CONFIGURACIÓN DE SEGURIDAD ───────── */
-// Solo estos dos servidores pueden usar el bot
 const ALLOWED_SERVERS = [
   '1340442398442127480', // Servidor Principal
   '1458243569075884219'  // Segundo Servidor Autorizado
@@ -50,8 +49,8 @@ const client = new Client({
 
 /* ───────── SERVER WEB (UPTIME) ───────── */
 const app = express();
-app.get('/', (_, res) => res.send(`🤖 Bot Power Luki: ${client?.ws?.status === 0 ? 'ONLINE ✅' : 'CONECTANDO...'}`));
-app.listen(process.env.PORT || 10000, () => console.log(`🌐 Web server activo`));
+app.get('/', (_, res) => res.send(`🤖 Bot Power Luki: ONLINE ✅`));
+app.listen(process.env.PORT || 10000);
 
 /* ───────── FUNCIONES AUXILIARES ───────── */
 function parseTimeToMs(timeStr) {
@@ -68,8 +67,7 @@ function parseTimeToMs(timeStr) {
 }
 
 function formatDateTime(dateOrMs) {
-  const d = new Date(dateOrMs);
-  return d.toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa' });
+  return new Date(dateOrMs).toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa' });
 }
 
 async function safeEditReply(interaction, data = {}) {
@@ -118,51 +116,79 @@ function makeLeaveEmbed(member) {
     .setTimestamp();
 }
 
-/* ───────── REGISTRO DE COMANDOS ───────── */
+/* ───────── REGISTRO DE COMANDOS (CORREGIDO) ───────── */
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Bot conectado como ${client.user.tag}`);
   client.user.setActivity('Power Luki Network', { type: ActivityType.Playing });
 
   const commands = [
-    new SlashCommandBuilder().setName('anuncio').setDescription('Enviar anuncio').addStringOption(o => o.setName('mensaje').setDescription('Texto del anuncio').setRequired(true)),
-    new SlashCommandBuilder().setName('nuevo').setDescription('Mensaje canal NUEVO').addStringOption(o => o.setName('mensaje').setDescription('Texto').setRequired(true)),
-    new SlashCommandBuilder().setName('ban').setDescription('Banear usuario').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('razon')),
-    new SlashCommandBuilder().setName('temban').setDescription('Ban temporal').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('tiempo').setRequired(true)).addStringOption(o => o.setName('razon')),
-    new SlashCommandBuilder().setName('unban').setDescription('Desbanear ID').addStringOption(o => o.setName('userid').setRequired(true)).addStringOption(o => o.setName('razon')),
-    new SlashCommandBuilder().setName('mute').setDescription('Silenciar').addUserOption(o => o.setName('usuario').setRequired(true)).addStringOption(o => o.setName('duracion')).addStringOption(o => o.setName('razon')),
-    new SlashCommandBuilder().setName('unmute').setDescription('Quitar silencio').addUserOption(o => o.setName('usuario').setRequired(true))
+    new SlashCommandBuilder()
+      .setName('anuncio')
+      .setDescription('Enviar anuncio oficial')
+      .addStringOption(o => o.setName('mensaje').setDescription('Escribe el contenido del anuncio').setRequired(true)),
+    
+    new SlashCommandBuilder()
+      .setName('nuevo')
+      .setDescription('Enviar mensaje al canal de novedades')
+      .addStringOption(o => o.setName('mensaje').setDescription('Escribe la novedad').setRequired(true)),
+
+    new SlashCommandBuilder()
+      .setName('ban')
+      .setDescription('Banear a un usuario permanentemente')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Motivo del baneo').setRequired(false)),
+
+    new SlashCommandBuilder()
+      .setName('temban')
+      .setDescription('Banear a un usuario temporalmente')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
+      .addStringOption(o => o.setName('tiempo').setDescription('Tiempo (ej: 1h, 1d)').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Motivo').setRequired(false)),
+
+    new SlashCommandBuilder()
+      .setName('unban')
+      .setDescription('Desbanear a un usuario por su ID')
+      .addStringOption(o => o.setName('userid').setDescription('ID del usuario').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Motivo del desbaneo').setRequired(false)),
+
+    new SlashCommandBuilder()
+      .setName('mute')
+      .setDescription('Silenciar a un usuario')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
+      .addStringOption(o => o.setName('duracion').setDescription('Tiempo del silencio').setRequired(false))
+      .addStringOption(o => o.setName('razon').setDescription('Motivo').setRequired(false)),
+
+    new SlashCommandBuilder()
+      .setName('unmute')
+      .setDescription('Quitar el silencio a un usuario')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a desilenciar').setRequired(true))
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('✅ Comandos sincronizados.');
-  } catch (err) { console.error('❌ Error REST:', err); }
+    console.log('✅ Comandos registrados correctamente.');
+  } catch (err) { console.error('❌ Error registrando comandos:', err); }
 });
 
 /* ───────── MANEJADOR DE INTERACCIONES ───────── */
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  // 🔒 BLOQUEO DE SEGURIDAD
   if (!ALLOWED_SERVERS.includes(interaction.guildId)) {
     return interaction.reply({ content: '⛔ Este bot es privado de Power Luki Network.', ephemeral: true });
   }
 
   const { commandName, options, guild, user } = interaction;
-
-  // ARREGLO: Capturar el mensaje ANTES del defer para que no se pierda
   const msgInput = options.getString('mensaje');
 
   await interaction.deferReply({ flags: 64 }).catch(() => {});
 
   try {
-    // ---------- ANUNCIO / NUEVO ----------
     if (commandName === 'anuncio' || commandName === 'nuevo') {
       if (!msgInput || msgInput.trim().length === 0) {
         return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío.' });
       }
-
       const channelId = commandName === 'anuncio' ? CONFIG.CHANNELS.ANUNCIOS : CONFIG.CHANNELS.NUEVO;
       const ch = await client.channels.fetch(channelId).catch(() => null);
       if (!ch) return safeEditReply(interaction, { content: '❌ Canal no encontrado.' });
@@ -171,15 +197,13 @@ client.on('interactionCreate', async (interaction) => {
       return safeEditReply(interaction, { content: '✅ Enviado correctamente.' });
     }
 
-    // ---------- MODERACIÓN ----------
     if (commandName === 'ban') {
       const target = options.getUser('usuario');
       const reason = options.getString('razon') || 'No especificada';
       await guild.members.ban(target.id, { reason }).catch(() => null);
-      
       const log = await client.channels.fetch(CONFIG.CHANNELS.BANS).catch(() => null);
       if (log) log.send({ embeds: [makeModEmbed({ title: '🚫 Sanción Aplicada', userTag: target.tag, moderatorTag: user.tag, reason })] });
-      return safeEditReply(interaction, { content: `🔨 **${target.tag}** ha sido baneado.` });
+      return safeEditReply(interaction, { content: `🔨 **${target.tag}** baneado.` });
     }
 
     if (commandName === 'temban') {
@@ -187,17 +211,13 @@ client.on('interactionCreate', async (interaction) => {
       const timeStr = options.getString('tiempo');
       const reason = options.getString('razon') || 'No especificada';
       const ms = parseTimeToMs(timeStr);
-
-      if (!ms) return safeEditReply(interaction, { content: '❌ Formato de tiempo inválido (ej: 1h, 30m).' });
+      if (!ms) return safeEditReply(interaction, { content: '❌ Tiempo inválido.' });
 
       await guild.members.ban(target.id, { reason }).catch(() => null);
       const log = await client.channels.fetch(CONFIG.CHANNELS.TEMPBANS).catch(() => null);
       if (log) log.send({ embeds: [makeModEmbed({ title: '⏱️ Ban Temporal', userTag: target.tag, moderatorTag: user.tag, reason, duration: timeStr, endsAt: Date.now() + ms })] });
 
-      setTimeout(async () => {
-        await guild.members.unban(target.id).catch(() => null);
-      }, ms);
-
+      setTimeout(() => { guild.members.unban(target.id).catch(() => null); }, ms);
       return safeEditReply(interaction, { content: `⏱️ **${target.tag}** baneado por ${timeStr}.` });
     }
 
@@ -209,17 +229,11 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'mute') {
       const target = options.getUser('usuario');
-      const dur = options.getString('duracion');
       const member = await guild.members.fetch(target.id).catch(() => null);
-      if (!member) return safeEditReply(interaction, { content: '❌ Usuario no encontrado.' });
-
+      if (!member) return safeEditReply(interaction, { content: '❌ No está en el servidor.' });
       let role = guild.roles.cache.find(r => r.name === 'Muted');
-      if (!role) role = await guild.roles.create({ name: 'Muted', permissions: [] });
-      
+      if (!role) role = await guild.roles.create({ name: 'Muted' });
       await member.roles.add(role);
-      const log = await client.channels.fetch(CONFIG.CHANNELS.MUTES).catch(() => null);
-      if (log) log.send({ embeds: [makeModEmbed({ title: '🔇 Silenciado', userTag: target.tag, moderatorTag: user.tag, reason: 'Manual', duration: dur })] });
-      
       return safeEditReply(interaction, { content: `🔇 **${target.tag}** silenciado.` });
     }
 
@@ -232,35 +246,29 @@ client.on('interactionCreate', async (interaction) => {
     }
 
   } catch (e) {
-    console.error('❌ Error interacción:', e);
-    return safeEditReply(interaction, { content: '❌ Error crítico al ejecutar el comando.' });
+    console.error(e);
+    return safeEditReply(interaction, { content: '❌ Error interno.' });
   }
 });
 
-/* ───────── EVENTOS DE MENSAJE Y MIEMBROS ───────── */
+/* ───────── EVENTOS ADICIONALES ───────── */
 client.on('messageCreate', async (message) => {
   if (!message.guild || message.author.bot || !ALLOWED_SERVERS.includes(message.guild.id)) return;
-  const content = message.content.toLowerCase();
-
-  if (content === '!ip' || content === 'ip') {
-    return message.channel.send(`\`\`\`text\n🌐 IP: ${CONFIG.SERVER_IP}\n\`\`\``);
-  }
-  if (content === '!tienda' || content === 'tienda') {
-    return message.channel.send(`\`\`\`text\n🛒 TIENDA: https://tienda.tuservidor.com\n\`\`\``);
+  if (message.content.toLowerCase() === '!ip') {
+    message.channel.send(`\`\`\`text\n🌐 IP: ${CONFIG.SERVER_IP}\n\`\`\``);
   }
 });
 
-client.on('guildMemberAdd', async (member) => {
-  if (!ALLOWED_SERVERS.includes(member.guild.id)) return;
+client.on('guildMemberAdd', async (m) => {
+  if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
   const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
-  if (ch) ch.send({ embeds: [makeWelcomeEmbed(member)] });
+  if (ch) ch.send({ embeds: [makeWelcomeEmbed(m)] });
 });
 
-client.on('guildMemberRemove', async (member) => {
-  if (!ALLOWED_SERVERS.includes(member.guild.id)) return;
+client.on('guildMemberRemove', async (m) => {
+  if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
   const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(() => null);
-  if (ch) ch.send({ embeds: [makeLeaveEmbed(member)] });
+  if (ch) ch.send({ embeds: [makeLeaveEmbed(m)] });
 });
 
-/* ───────── LOGIN ───────── */
 client.login(CONFIG.TOKEN);
