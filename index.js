@@ -27,7 +27,10 @@ const CONFIG = {
     WELCOME: '1340454070070022205',
     LEAVE: '1340475418091847791'
   },
-  SERVER_IP: 'play.tuservidor.com'
+  SERVER_IP: process.env.SERVER_IP || 'play.tuservidor.com',
+  // Añadí SERVER_PORT y VERSIONS para que las respuestas premium funcionen.
+  SERVER_PORT: process.env.SERVER_PORT || '19132',
+  VERSIONS: process.env.VERSIONS || 'Java & Bedrock (varias versiones)'
 };
 
 /* ───────── CLIENTE ───────── */
@@ -160,18 +163,51 @@ client.on('messageCreate', async (message) => {
   if (!message.guild || message.author.bot) return;
   if (!ALLOWED_SERVERS.includes(message.guild.id)) return;
 
-  const c = message.content.toLowerCase();
+  // contenido en minúsculas para validaciones
+  const content = message.content.toLowerCase();
 
-  if (c === 'ip' || c === '!ip') {
-    return message.channel.send(
-      `IP DEL SERVIDOR:\n${CONFIG.SERVER_IP}`
-    );
+  // --- RESPUESTA PREMIUM IP ---
+  if (['.ip', ':ip', '-ip', '_ip'].some(cmd => content.startsWith(cmd))) {
+    const msgIP = [
+      '✨ **P O W E R  L U K I  N E T W O R K** ✨',
+      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+      ' 🌐 **IP PRINCIPAL** .: _ `' + CONFIG.SERVER_IP + '` _',
+      ' 🔌 **PUERTO BEDROCK** .: _ `' + CONFIG.SERVER_PORT + '` _',
+      ' 🎮 **VERSIONES** .: _ `' + CONFIG.VERSIONS + '` _',
+      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+      ' > *¡Conexión compatible con Java y Bedrock!*'
+    ].join('\n');
+
+    return message.reply({ content: msgIP }).catch(() => null);
   }
 
-  if (c === 'tienda' || c === '!tienda') {
+  // --- RESPUESTA PREMIUM TIENDA ---
+  if (['.tienda', ':tienda', '-tienda', '_tienda'].some(cmd => content.startsWith(cmd))) {
+    const msgTienda = [
+      '🛒 **TIENDA OFICIAL | POWER LUKI**',
+      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+      ' 🔗 **LINK DIRECTO** .: _ https://powerluki.tebex.io _',
+      ' 💎 **BENEFICIOS** .: _ RANGOS - KEYS - UNBANS _',
+      ' - - - - - - - - - - - - - - - - -',
+      ' 🛡️ **SOPORTE** .: _ Abre un ticket si tienes dudas _',
+      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+      ' *¡Tu apoyo mantiene el servidor online!* ✨'
+    ].join('\n');
+
+    return message.reply({ content: msgTienda }).catch(() => null);
+  }
+
+  // RESPUESTAS simples antiguas (por compatibilidad)
+  if (content === 'ip' || content === '!ip') {
+    return message.channel.send(
+      `IP DEL SERVIDOR:\n${CONFIG.SERVER_IP}`
+    ).catch(() => null);
+  }
+
+  if (content === 'tienda' || content === '!tienda') {
     return message.channel.send(
       `TIENDA OFICIAL:\nhttps://tienda.tuservidor.com`
-    );
+    ).catch(() => null);
   }
 });
 
@@ -179,13 +215,13 @@ client.on('messageCreate', async (message) => {
 client.on('guildMemberAdd', async (m) => {
   if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
   const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
-  if (ch) ch.send(`✨ Bienvenido **${m.user.username}**`);
+  if (ch) ch.send(`✨ Bienvenido **${m.user.username}**`).catch(() => null);
 });
 
 client.on('guildMemberRemove', async (m) => {
   if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
   const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(() => null);
-  if (ch) ch.send(`😔 **${m.user.username}** salió del servidor`);
+  if (ch) ch.send(`😔 **${m.user.username}** salió del servidor`).catch(() => null);
 });
 
 /* ───────── LOGIN ───────── */
