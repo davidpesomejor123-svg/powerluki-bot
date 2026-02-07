@@ -13,6 +13,12 @@ import {
 } from 'discord.js';
 
 /* ───────── CONFIG ───────── */
+// IDs de los servidores donde el bot TIENE PERMISO de funcionar
+const ALLOWED_SERVERS = [
+  '1340442398442127480', // Servidor Principal (indicado por ti)
+  '1458243569075884219'  // El otro servidor autorizado
+];
+
 const CONFIG = {
   TOKEN: process.env.TOKEN,
   MAIN_GUILD_ID: '1458243569075884219',
@@ -72,20 +78,17 @@ function formatDateTime(dateOrMs) {
 // FUNCIÓN CORREGIDA PARA EVITAR WARNINGS Y ERRORES DE INTERACCIÓN
 async function safeEditReply(interaction, data = {}) {
   try {
-    // Normalizamos: si el usuario mandó { ephemeral: true } lo convertimos a flags
     const { ephemeral, flags, ...cleanData } = data;
     const replyOptions = { ...cleanData };
     if (ephemeral) replyOptions.flags = 64;
 
     if (interaction.deferred || interaction.replied) {
-      // Intentamos editar; algunos errores de Discord dicen "already acknowledged" — los ignoramos silenciosamente
       return await interaction.editReply(replyOptions).catch((err) => {
         if (!/already been acknowledged/i.test(err?.message || '')) {
           console.error('⚠️ Error al editar reply:', err);
         }
       });
     } else {
-      // Primera respuesta. Usamos reply (podemos usar ephemeral si se pidió)
       return await interaction.reply(replyOptions).catch((err) => {
         if (!/already been acknowledged/i.test(err?.message || '')) {
           console.error('⚠️ Error al reply:', err);
@@ -193,6 +196,7 @@ client.once(Events.ClientReady, async () => {
 
   const rest = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
   try {
+    // Registramos comandos globalmente para que aparezcan rápido, pero los filtraremos al ejecutarlos
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
     console.log('✅ Slash commands registrados.');
   } catch (err) {
@@ -204,13 +208,21 @@ client.once(Events.ClientReady, async () => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand?.()) return;
 
+  // 🔒 SEGURIDAD: VERIFICACIÓN DE SERVIDOR 🔒
+  // Si el comando no viene de los servidores permitidos, no hacemos nada o enviamos error.
+  if (!interaction.guildId || !ALLOWED_SERVERS.includes(interaction.guildId)) {
+    return interaction.reply({ 
+      content: '⛔ **Acceso Denegado:** Este bot es privado y solo funciona en los servidores oficiales de Power Luki.', 
+      ephemeral: true 
+    }).catch(() => {});
+  }
+
   const cmd = interaction.commandName;
 
-  // Defer seguro (ignoramos errores si Discord ya respondió)
   try {
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply({ flags: 64 }).catch((e) => {
-        console.log(`Nota: Defer falló para ${cmd} (posible lag), continuando...`);
+        console.log(`Nota: Defer falló para ${cmd}, continuando...`);
       });
     }
   } catch (e) {
@@ -218,11 +230,10 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   try {
-    // ---------- ANUNCIO (FIXED) ----------
+    // ---------- ANUNCIO ----------
     if (cmd === 'anuncio') {
       const msg = interaction.options.getString('mensaje') ?? '';
 
-      // BLINDAJE: Si el mensaje llega vacío, cancelamos antes de que explote
       if (!msg || msg.length === 0) return safeEditReply(interaction, { content: '❌ Error: El mensaje llegó vacío.' });
 
       const ch = await client.channels.fetch(CONFIG.CHANNELS.ANUNCIOS).catch(() => null);
@@ -236,7 +247,7 @@ client.on('interactionCreate', async (interaction) => {
       return safeEditReply(interaction, { content: '✅ Anuncio enviado.' });
     }
 
-    // ---------- NUEVO (FIXED) ----------
+    // ---------- NUEVO ----------
     if (cmd === 'nuevo') {
       const msg = interaction.options.getString('mensaje') ?? '';
 
@@ -391,6 +402,10 @@ client.on('interactionCreate', async (interaction) => {
 /* ───────── MENSAJES AUTO ───────── */
 client.on('messageCreate', async (message) => {
   if (!message.guild || message.author.bot) return;
+  
+  // 🔒 SEGURIDAD: Solo responder si es un servidor autorizado
+  if (!ALLOWED_SERVERS.includes(message.guild.id)) return;
+
   const content = message.content.toLowerCase();
 
   if (content === '!ip' || content === 'ip') {
@@ -425,11 +440,17 @@ client.on('messageCreate', async (message) => {
 
 /* ───────── BIENVENIDAS ───────── */
 client.on('guildMemberAdd', async (member) => {
+  // 🔒 SEGURIDAD: Solo si es servidor autorizado
+  if (!ALLOWED_SERVERS.includes(member.guild.id)) return;
+
   const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
   if (ch) await ch.send({ embeds: [makeWelcomeEmbed(member)] }).catch(() => {});
 });
 
 client.on('guildMemberRemove', async (member) => {
+  // 🔒 SEGURIDAD: Solo si es servidor autorizado
+  if (!ALLOWED_SERVERS.includes(member.guild.id)) return;
+
   const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(() => null);
   if (ch) await ch.send({ embeds: [makeLeaveEmbed(member)] }).catch(() => {});
 });
