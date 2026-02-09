@@ -1,4 +1,4 @@
-// index.js — Power Lucky Bot (CORREGIDO Y SIN LAG)
+// index.js — Power Lucky Network (completo, con todos los canales)
 import 'dotenv/config';
 import express from 'express';
 import fs from 'fs/promises';
@@ -16,7 +16,8 @@ import {
   PermissionsBitField,
 } from 'discord.js';
 
-/* ───────── CONFIGURACIÓN ───────── */
+/* ---------- CONFIG ---------- */
+const SERVER_NAME = 'POWER LUCKY NETWORK';
 const ALLOWED_SERVERS = ['1340442398442127480', '1458243569075884219'];
 
 const CONFIG = {
@@ -35,92 +36,186 @@ const CONFIG = {
     LEAVE: '1340475418091847791'
   },
   SERVER_IP: 'play.powerlucky.net',
+  STORE_URL: 'tienda.powerlucky.net'
 };
 
+/* ---------- FILES & PERSISTENCE ---------- */
 const DB_DIR = path.resolve('./data');
 if (!fsSync.existsSync(DB_DIR)) fsSync.mkdirSync(DB_DIR);
 const TEMPBANS_FILE = path.join(DB_DIR, 'tempbans.json');
 const XP_FILE = path.join(DB_DIR, 'xp.json');
 
-/* ───────── PERSISTENCIA (SIN BLOQUEOS) ───────── */
 let tempBans = {};
 let xpData = {};
 let xpNeedsSave = false;
 
-const loadData = () => {
-  try {
-    if (fsSync.existsSync(TEMPBANS_FILE)) tempBans = JSON.parse(fsSync.readFileSync(TEMPBANS_FILE, 'utf8') || '{}');
-    if (fsSync.existsSync(XP_FILE)) xpData = JSON.parse(fsSync.readFileSync(XP_FILE, 'utf8') || '{}');
-  } catch (e) { console.error("❌ Error cargando DB:", e); }
-};
-loadData();
+try {
+  if (fsSync.existsSync(TEMPBANS_FILE)) tempBans = JSON.parse(fsSync.readFileSync(TEMPBANS_FILE, 'utf8') || '{}');
+} catch (e) { console.error('Error leyendo tempbans:', e); }
+try {
+  if (fsSync.existsSync(XP_FILE)) xpData = JSON.parse(fsSync.readFileSync(XP_FILE, 'utf8') || '{}');
+} catch (e) { console.error('Error leyendo xp:', e); }
 
 async function saveData(file, data) {
-  try {
-    await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf8');
-  } catch (e) { console.error(`❌ Error guardando ${file}:`, e); }
+  try { await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf8'); }
+  catch (e) { console.error(`Error guardando ${file}:`, e); }
 }
 
+// save XP periodically if needed
 setInterval(() => {
   if (xpNeedsSave) {
     saveData(XP_FILE, xpData);
     xpNeedsSave = false;
   }
-}, 30000);
+}, 30_000);
 
-/* ───────── UTILIDADES ───────── */
+/* ---------- UTIL ---------- */
 function parseDuration(str) {
   if (!str) return null;
-  const regex = /(\d+)\s*(d|h|m)/g;
-  let match, totalMs = 0;
-  while ((match = regex.exec(str.toLowerCase())) !== null) {
-    const n = parseInt(match[1]);
+  const regex = /(\d+)\s*(d|h|m|s)/g;
+  let match;
+  let total = 0;
+  while ((match = regex.exec(String(str).toLowerCase())) !== null) {
+    const n = Number(match[1]);
     const unit = match[2];
-    if (unit === 'd') totalMs += n * 86400000;
-    else if (unit === 'h') totalMs += n * 3600000;
-    else if (unit === 'm') totalMs += n * 60000;
+    if (unit === 'd') total += n * 24 * 60 * 60 * 1000;
+    if (unit === 'h') total += n * 60 * 60 * 1000;
+    if (unit === 'm') total += n * 60 * 1000;
+    if (unit === 's') total += n * 1000;
   }
-  return totalMs > 0 ? totalMs : null;
+  return total > 0 ? total : null;
 }
-
-const formatDate = (ts) => new Date(ts).toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa' });
-
+function formatDate(ts) {
+  return new Date(ts).toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa' });
+}
 function fillTemplate(template, map) {
   let out = template;
   for (const k in map) out = out.replace(new RegExp(`<${k}>`, 'g'), map[k]);
   return out;
 }
 
-/* ───────── PLANTILLAS ───────── */
+/* ---------- TEMPLATES ---------- */
 const TEMPLATES = {
-  BAN: `╔════════════════════════════════════╗\n      🚫 USUARIO BANEADO 🚫\n╚════════════════════════════════════╝\n\n ●--👤 Usuario: <mención_usuario>\n ●--🆔 ID: <id_del_usuario>\n ●--⚖️ Razón: <razón_del_ban>\n ●--🛡️ Moderador: <moderador>\n\n _¡Las reglas se respetan!_`,
-  TEMPBAN: `╔════════════════════════════════════╗\n      ⏳ ACCESO SUSPENDIDO ⏳\n╚════════════════════════════════════╝\n\n ●--👤 Usuario: <mención_usuario>\n ●--🆔 ID: <id_del_usuario>\n ●--⚖️ Razón: <razón_del_ban>\n ●--⏱️ Duración: <tiempo>\n ●--📅 Expira: <expira>\n\n _¡Cumple tu tiempo y vuelve mejor!_`,
-  MUTE: `╔════════════════════════════════════╗\n      🔇 USUARIO SILENCIADO 🔇\n╚════════════════════════════════════╝\n\n ●--👤 Usuario: <mención_usuario>\n ●--⚖️ Razón: <razón_del_mute>\n ●--⏱️ Tiempo: <duración_del_mute>\n ●--🛡️ Moderador: <moderador>`,
-  UNMUTE: `╔════════════════════════════════════╗\n      🔊 SILENCIO REMOVIDO 🔊\n╚════════════════════════════════════╝\n\n ●--👤 Usuario: <mención_usuario>\n ●--🛡️ Moderador: <moderador>`,
-  UNBAN: `╔════════════════════════════════════╗\n      🔓 ACCESO RESTABLECIDO 🔓\n╚════════════════════════════════════╝\n\n 🔹 Usuario ➭ <mención_usuario>\n 🔹 ID      ➭ <id_del_usuario>\n 🔹 Estado  ➭ RE-ADMITIDO [✔]`,
-  WELCOME: `╔════════════════════════════════════╗\n      💎 POWER LUKCY NETWORK 💎\n╚════════════════════════════════════╝\n\n 🔹 Usuario ➭ <mención_usuario>\n 🔹 Acceso  ➭ AUTORIZADO [✔]\n 🔹 Fecha   ➭ <fecha_ingreso>\n\n _🥂 ¡Bienvenido a la elite!_`,
-  LEAVE: `╔════════════════════════════════════╗\n      🛫 SALIDA DE LA NETWORK 🛫\n╚════════════════════════════════════╝\n\n 🔹 Usuario ➭ <nombre_usuario>\n 🔹 Estado  ➭ DESCONECTADO [❌]`,
-  LEVELUP: `╔════════════════════════════════════╗\n      🆙 LEVEL UP / NUEVO NIVEL 🆙\n╚════════════════════════════════════╝\n\n 🔹 Usuario ➭ <mención_usuario>\n 🔹 Nivel   ➭ <nivel_anterior> ➔ ⭐ <nuevo_nivel>\n 🔹 XP Total➭ <xp_total>\n\n _🔥 ¡Imparable! Sigue chateando._`
+  BAN: `╔════════════════════════════════════╗
+      🚫 USUARIO BANEADO 🚫
+╚════════════════════════════════════╝
+
+  ●--👤 Usuario: <mención_usuario>
+  ●--🆔 ID: <id_del_usuario>
+  ●--⚖️ Razón: <razón_del_ban>
+  ●--🛡️ Moderador: <moderador>
+
+  _¡Las reglas se respetan!_
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  TEMPBAN: `╔════════════════════════════════════╗
+      ⏳ ACCESO SUSPENDIDO ⏳
+╚════════════════════════════════════╝
+
+  ●--👤 Usuario: <mención_usuario>
+  ●--🆔 ID: <id_del_usuario>
+  ●--⚖️ Razón: <razón_del_ban>
+  ●--⏱️ Duración: <tiempo>
+  ●--📅 Expira: <expira>
+
+  _¡Cumple tu tiempo y vuelve mejor!_
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  MUTE: `╔════════════════════════════════════╗
+      🔇 USUARIO SILENCIADO 🔇
+╚════════════════════════════════════╝
+
+  ●--👤 Usuario: <mención_usuario>
+  ●--⚖️ Razón: <razón_del_mute>
+  ●--⏱️ Tiempo: <duración_del_mute>
+  ●--🛡️ Moderador: <moderador>
+
+  _¡Shhh! Medita tus palabras._
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  UNMUTE: `╔════════════════════════════════════╗
+      🔊 SILENCIO REMOVIDO 🔊
+╚════════════════════════════════════╝
+
+  ●--👤 Usuario: <mención_usuario>
+  ●--🛡️ Moderador: <moderador>
+
+  _¡Ya puedes hablar de nuevo!_
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  UNBAN: `╔════════════════════════════════════╗
+      🔓 ACCESO RESTABLECIDO 🔓
+╚════════════════════════════════════╝
+
+  🔹 Usuario ➭ <mención_usuario>
+  🔹 ID      ➭ <id_del_usuario>
+  🔹 Estado  ➭ RE-ADMITIDO [✔]
+  🔹 Soporte ➭ ${SERVER_NAME}
+
+  _✨ ¡Bienvenido de vuelta! Sigue las reglas._
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  WELCOME: `╔════════════════════════════════════╗
+     💎 ${SERVER_NAME} 💎
+╚════════════════════════════════════╝
+
+  🔹 Usuario ➭ <mención_usuario>
+  🔹 Acceso  ➭ AUTORIZADO [✔]
+  🔹 Fecha   ➭ <fecha_ingreso>
+
+  _🥂 Bienvenido a la elite. ¡Diviértete!_
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  LEAVE: `╔════════════════════════════════════╗
+     🛫 SALIDA DE LA NETWORK 🛫
+╚════════════════════════════════════╝
+
+  🔹 Usuario ➭ <nombre_usuario>
+  🔹 Estado  ➭ DESCONECTADO [❌]
+  🔹 Lugar   ➭ ${SERVER_NAME}
+
+  _👋 Esperamos verte regresar pronto._
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+
+  LEVELUP: `╔════════════════════════════════════╗
+      🆙 LEVEL UP / NUEVO NIVEL 🆙
+╚════════════════════════════════════╝
+
+  🔹 Usuario ➭ <mención_usuario>
+  🔹 Nivel   ➭ <nivel_anterior> ➔ ⭐ <nuevo_nivel>
+  🔹 XP Total➭ <xp_total>
+  🔹 Rol     ➭ <nombre_rol_recompensa>
+
+  _🔥 ¡Imparable! Sigue chateando._
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
 };
 
-/* ───────── CLIENTE ───────── */
+/* ---------- CLIENT ---------- */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
-  ]
+  ],
+  partials: [Partials.Channel]
 });
 
+/* ---------- TEMPBAN SCHEDULER ---------- */
 const scheduledUnbans = new Map();
 
 async function performUnban(guildId, userId) {
-  const guild = await client.guilds.fetch(guildId).catch(() => null);
-  if (!guild) return;
-  await guild.bans.remove(userId, 'Tempban expirado').catch(() => null);
-  const ch = await client.channels.fetch(CONFIG.CHANNELS.TEMPBAN).catch(() => null);
-  if (ch?.isTextBased()) ch.send(`🔔 Usuario <@${userId}> desbaneado automáticamente.`).catch(() => null);
+  try {
+    const guild = await client.guilds.fetch(guildId).catch(() => null);
+    if (!guild) return;
+    await guild.bans.remove(userId, 'Tempban expirado').catch(() => null);
+    const ch = await client.channels.fetch(CONFIG.CHANNELS.TEMPBAN).catch(() => null);
+    if (ch?.isTextBased()) {
+      await ch.send({ content: `🔔 Usuario <@${userId}> desbaneado automáticamente (tempban expirado).` }).catch(() => null);
+    }
+  } catch (e) {
+    console.error('performUnban error:', e);
+  }
 }
 
 function scheduleUnban(guildId, userId, expiresAt) {
@@ -133,144 +228,307 @@ function scheduleUnban(guildId, userId, expiresAt) {
     return;
   }
   if (scheduledUnbans.has(key)) clearTimeout(scheduledUnbans.get(key));
-  scheduledUnbans.set(key, setTimeout(async () => {
+  const t = setTimeout(async () => {
     await performUnban(guildId, userId);
     delete tempBans[key];
-    saveData(TEMPBANS_FILE, tempBans);
+    await saveData(TEMPBANS_FILE, tempBans);
     scheduledUnbans.delete(key);
-  }, ms));
+  }, ms);
+  scheduledUnbans.set(key, t);
 }
 
-/* ───────── READY (Sincronización Corregida) ───────── */
+/* ---------- READY: register commands & re-schedule tempbans ---------- */
 client.once(Events.ClientReady, async () => {
-  console.log(`✅ ${client.user.tag} operativo.`);
-  client.user.setActivity('Power Lucky Network', { type: ActivityType.Playing });
+  console.log(`✅ Bot conectado como ${client.user.tag}`);
+  client.user.setActivity(`${SERVER_NAME}`, { type: ActivityType.Playing });
 
   const commands = [
-    new SlashCommandBuilder().setName('anuncio').setDescription('Enviar anuncio oficial').addStringOption(o => o.setName('mensaje').setDescription('Contenido del mensaje').setRequired(true)),
-    new SlashCommandBuilder().setName('nuevo').setDescription('Enviar novedad').addStringOption(o => o.setName('mensaje').setDescription('Contenido de la novedad').setRequired(true)),
-    new SlashCommandBuilder().setName('cambios').setDescription('Publicar cambios').addStringOption(o => o.setName('mensaje').setDescription('Descripción de cambios').setRequired(true)),
-    new SlashCommandBuilder().setName('ban').setDescription('Ban permanente').addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true)).addStringOption(o => o.setName('razon').setDescription('Motivo del ban')).setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
-    new SlashCommandBuilder().setName('tempban').setDescription('Ban temporal').addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true)).addStringOption(o => o.setName('duracion').setDescription('Ej: 7d, 12h').setRequired(true)).addStringOption(o => o.setName('razon').setDescription('Motivo')).setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
-    new SlashCommandBuilder().setName('mute').setDescription('Silenciar').addUserOption(o => o.setName('usuario').setDescription('Usuario a silenciar').setRequired(true)).addStringOption(o => o.setName('duracion').setDescription('Ej: 1h, 30m').setRequired(true)).addStringOption(o => o.setName('razon').setDescription('Motivo')).setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers),
-    new SlashCommandBuilder().setName('unmute').setDescription('Quitar silencio').addUserOption(o => o.setName('usuario').setDescription('Usuario a liberar').setRequired(true)).setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers),
-    new SlashCommandBuilder().setName('unban').setDescription('Desbanear por ID').addStringOption(o => o.setName('userid').setDescription('ID del usuario').setRequired(true)).setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
+    new SlashCommandBuilder()
+      .setName('anuncio')
+      .setDescription('Enviar anuncio oficial')
+      .addStringOption(o => o.setName('mensaje').setDescription('Texto del anuncio (usa doble espacio para salto)').setRequired(true)),
+
+    new SlashCommandBuilder()
+      .setName('nuevo')
+      .setDescription('Enviar novedad')
+      .addStringOption(o => o.setName('mensaje').setDescription('Texto de la novedad (usa doble espacio para salto)').setRequired(true)),
+
+    new SlashCommandBuilder()
+      .setName('cambios')
+      .setDescription('Publicar cambios en canal de cambios')
+      .addStringOption(o => o.setName('mensaje').setDescription('Describe los cambios').setRequired(true)),
+
+    new SlashCommandBuilder()
+      .setName('ban')
+      .setDescription('Banear permanentemente a un usuario')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Razón del ban').setRequired(false))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
+
+    new SlashCommandBuilder()
+      .setName('tempban')
+      .setDescription('Ban temporal: ej. 7d, 12h')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a banear temporalmente').setRequired(true))
+      .addStringOption(o => o.setName('duracion').setDescription('Duración: 7d 12h 30m 10s').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Razón').setRequired(false))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
+
+    new SlashCommandBuilder()
+      .setName('mute')
+      .setDescription('Silenciar (timeout)')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a silenciar').setRequired(true))
+      .addStringOption(o => o.setName('duracion').setDescription('Duración: 10m 1h 30s').setRequired(true))
+      .addStringOption(o => o.setName('razon').setDescription('Razón').setRequired(false))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers),
+
+    new SlashCommandBuilder()
+      .setName('unmute')
+      .setDescription('Quitar silencio')
+      .addUserOption(o => o.setName('usuario').setDescription('Usuario a des-silenciar').setRequired(true))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers),
+
+    new SlashCommandBuilder()
+      .setName('unban')
+      .setDescription('Quitar el ban por ID')
+      .addStringOption(o => o.setName('userid').setDescription('ID del usuario a desbanear').setRequired(true))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
+
+    new SlashCommandBuilder()
+      .setName('ip')
+      .setDescription('Mostrar IP del servidor'),
+
+    new SlashCommandBuilder()
+      .setName('tienda')
+      .setDescription('Mostrar tienda del servidor'),
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
-  for (const gId of ALLOWED_SERVERS) {
-    try {
-      await rest.put(Routes.applicationGuildCommands(client.user.id, gId), { body: commands });
-    } catch (e) { console.error(`❌ Error en server ${gId}:`, e); }
+  try {
+    for (const guildId of ALLOWED_SERVERS) {
+      await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body: commands });
+      console.log(`Comandos registrados en ${guildId}`);
+    }
+  } catch (err) {
+    console.error('Error registrando comandos:', err);
   }
 
-  for (const key in tempBans) {
+  // reprogramar tempbans desde archivo
+  for (const key of Object.keys(tempBans)) {
+    const entry = tempBans[key];
     const [gId, uId] = key.split('|');
-    scheduleUnban(gId, uId, tempBans[key].expiresAt);
+    if (entry && entry.expiresAt) scheduleUnban(gId, uId, entry.expiresAt);
   }
 });
 
-/* ───────── INTERACCIONES ───────── */
-client.on(Events.InteractionCreate, async (int) => {
-  if (!int.isChatInputCommand() || !ALLOWED_SERVERS.includes(int.guildId)) return;
-  const { commandName, options } = int;
-  await int.deferReply({ ephemeral: true });
+/* ---------- INTERACTION HANDLER ---------- */
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand() || !ALLOWED_SERVERS.includes(interaction.guildId)) return;
+  const { commandName, options } = interaction;
+  await interaction.deferReply({ ephemeral: true });
 
   try {
+    // anuncio / nuevo / cambios
     if (['anuncio', 'nuevo', 'cambios'].includes(commandName)) {
-      const msg = options.getString('mensaje').replace(/\s{2,}/g, '\n');
-      const cid = commandName === 'anuncio' ? CONFIG.CHANNELS.ANUNCIOS : (commandName === 'nuevo' ? CONFIG.CHANNELS.NUEVO : CONFIG.CHANNELS.CAMBIOS);
-      const ch = await client.channels.fetch(cid);
-      await ch.send(msg);
-      return int.editReply('✅ Enviado.');
+      const raw = options.getString('mensaje', true);
+      const mensaje = raw.replace(/\s{2,}/g, '\n').trim();
+      const canalId = commandName === 'anuncio' ? CONFIG.CHANNELS.ANUNCIOS : (commandName === 'nuevo' ? CONFIG.CHANNELS.NUEVO : CONFIG.CHANNELS.CAMBIOS);
+      const canal = await client.channels.fetch(canalId).catch(() => null);
+      if (!canal || !canal.isTextBased()) return interaction.editReply('❌ Canal no encontrado o no es de texto.');
+      await canal.send({ content: mensaje }).catch(() => null);
+      return interaction.editReply('✅ Mensaje enviado.');
     }
 
+    // ban
     if (commandName === 'ban') {
-      const target = options.getUser('usuario');
-      const reason = options.getString('razon') || 'No especificada';
-      await int.guild.members.ban(target.id, { reason });
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.BANS);
-      if (ch) ch.send(fillTemplate(TEMPLATES.BAN, { mención_usuario: `<@${target.id}>`, id_del_usuario: target.id, razón_del_ban: reason, moderador: `<@${int.user.id}>` }));
-      return int.editReply('✅ Baneado.');
+      const target = options.getUser('usuario', true);
+      const reason = options.getString('razon') || 'Sin razón especificada';
+      await interaction.guild.members.ban(target.id, { reason }).catch(e => { throw e; });
+      const text = fillTemplate(TEMPLATES.BAN, { 'mención_usuario': `<@${target.id}>`, 'id_del_usuario': target.id, 'razón_del_ban': reason, 'moderador': `<@${interaction.user.id}>` });
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.BANS).catch(() => null);
+      if (ch?.isTextBased()) await ch.send({ content: text }).catch(() => null);
+      return interaction.editReply(`✅ ${target.tag} baneado.`);
     }
 
+    // tempban
     if (commandName === 'tempban') {
-      const target = options.getUser('usuario');
-      const ms = parseDuration(options.getString('duracion'));
-      if (!ms) return int.editReply('❌ Tiempo inválido.');
+      const target = options.getUser('usuario', true);
+      const durStr = options.getString('duracion', true);
+      const ms = parseDuration(durStr);
+      if (!ms) return interaction.editReply('❌ Duración inválida (ej: 7d 12h 30m 10s).');
+      const reason = options.getString('razon') || 'Sin razón especificada';
       const expiresAt = Date.now() + ms;
-      await int.guild.members.ban(target.id, { reason: options.getString('razon') });
-      tempBans[`${int.guildId}|${target.id}`] = { expiresAt };
+      await interaction.guild.members.ban(target.id, { reason }).catch(e => { throw e; });
+      const key = `${interaction.guildId}|${target.id}`;
+      tempBans[key] = { expiresAt, reason, moderatorId: interaction.user.id };
       await saveData(TEMPBANS_FILE, tempBans);
-      scheduleUnban(int.guildId, target.id, expiresAt);
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.TEMPBAN);
-      if (ch) ch.send(fillTemplate(TEMPLATES.TEMPBAN, { mención_usuario: `<@${target.id}>`, id_del_usuario: target.id, razón_del_ban: options.getString('razon') || 'Mod', tiempo: options.getString('duracion'), expira: formatDate(expiresAt) }));
-      return int.editReply('✅ Tempban listo.');
+      scheduleUnban(interaction.guildId, target.id, expiresAt);
+      const text = fillTemplate(TEMPLATES.TEMPBAN, { 'mención_usuario': `<@${target.id}>`, 'id_del_usuario': target.id, 'razón_del_ban': reason, 'tiempo': durStr, 'expira': formatDate(expiresAt) });
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.TEMPBAN).catch(() => null);
+      if (ch?.isTextBased()) await ch.send({ content: text }).catch(() => null);
+      return interaction.editReply(`✅ Tempban aplicado hasta ${formatDate(expiresAt)}.`);
     }
 
+    // mute
     if (commandName === 'mute') {
-      const target = options.getUser('usuario');
-      const ms = parseDuration(options.getString('duracion'));
-      const member = await int.guild.members.fetch(target.id);
-      await member.timeout(ms, options.getString('razon'));
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.MUTE);
-      if (ch) ch.send(fillTemplate(TEMPLATES.MUTE, { mención_usuario: `<@${target.id}>`, razón_del_mute: options.getString('razon') || 'Mod', duración_del_mute: options.getString('duracion'), moderador: `<@${int.user.id}>` }));
-      return int.editReply('🔇 Muteado.');
+      const target = options.getUser('usuario', true);
+      const durStr = options.getString('duracion', true);
+      const ms = parseDuration(durStr);
+      if (!ms) return interaction.editReply('❌ Duración inválida.');
+      const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+      if (!member) return interaction.editReply('❌ Miembro no encontrado.');
+      await member.timeout(ms, options.getString('razon') || `Mute por ${interaction.user.tag}`).catch(e => { throw e; });
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.MUTE).catch(() => null);
+      if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.MUTE, { 'mención_usuario': `<@${target.id}>`, 'razón_del_mute': options.getString('razon') || 'Moderación', 'duración_del_mute': durStr, 'moderador': `<@${interaction.user.id}>` }) }).catch(() => null);
+      return interaction.editReply(`🔇 <@${target.id}> silenciado por ${durStr}.`);
     }
 
-    if (commandName === 'unban') {
-      const id = options.getString('userid');
-      await int.guild.bans.remove(id);
-      return int.editReply('✅ Desbaneado.');
+    // unmute
+    if (commandName === 'unmute') {
+      const target = options.getUser('usuario', true);
+      const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+      if (!member) return interaction.editReply('❌ Miembro no encontrado.');
+      await member.timeout(null, `Unmute por ${interaction.user.tag}`).catch(e => { throw e; });
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.UNMUTE).catch(() => null);
+      if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.UNMUTE, { 'mención_usuario': `<@${target.id}>`, 'moderador': `<@${interaction.user.id}>` }) }).catch(() => null);
+      return interaction.editReply(`🔊 <@${target.id}> desmuteado.`);
     }
+
+    // unban
+    if (commandName === 'unban') {
+      const id = options.getString('userid', true);
+      await interaction.guild.bans.remove(id).catch(e => { throw e; });
+      const ch = await client.channels.fetch(CONFIG.CHANNELS.UNBAN).catch(() => null);
+      if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.UNBAN, { 'mención_usuario': `<@${id}>`, 'id_del_usuario': id }) }).catch(() => null);
+      // limpiar tempbans si existiera
+      const k = `${interaction.guildId}|${id}`;
+      if (tempBans[k]) { delete tempBans[k]; await saveData(TEMPBANS_FILE, tempBans); if (scheduledUnbans.has(k)) { clearTimeout(scheduledUnbans.get(k)); scheduledUnbans.delete(k); } }
+      return interaction.editReply('✅ Usuario desbaneado.');
+    }
+
+    // ip
+    if (commandName === 'ip') {
+      return interaction.editReply(`╔════════════════════════════════════╗
+      🛡️  CONEXIÓN AL SERVIDOR  🛡️
+╚════════════════════════════════════╝
+
+  🌐 **Dirección IP** ➭ ${CONFIG.SERVER_IP}
+  ☕ **Versión Java** ➭ 1.8 - 1.20.x
+  📱 **Bedrock Port** ➭ 19132
+
+  🟢 **Estado** ➭ EN LÍNEA [✔]
+  🌍 **Network** ➭ ${SERVER_NAME}
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    }
+
+    // tienda
+    if (commandName === 'tienda') {
+      return interaction.editReply(`╔════════════════════════════════════╗
+       🛒  TIENDA DE LA NETWORK  🛒
+╚════════════════════════════════════╝
+
+  🛍️ **Link** ➭ ${CONFIG.STORE_URL}
+  💎 **Rangos** ➭ VIP, MVP, ELITE
+
+  🛡️ **Soporte** ➭ ${SERVER_NAME}
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    }
+
   } catch (e) {
-    console.error(e);
-    int.editReply('❌ Error ejecutando el comando.');
+    console.error('Error en interacción:', e);
+    try { await interaction.editReply('❌ Ocurrió un error ejecutando el comando.'); } catch (_) {}
   }
 });
 
-/* ───────── MENSAJES (XP + IP RÁPIDA) ───────── */
+/* ---------- MESSAGE HANDLER (IP / TIENDA / XP) ---------- */
 const xpCooldowns = new Map();
 
-client.on('messageCreate', async (msg) => {
-  if (!msg.guild || msg.author.bot || !ALLOWED_SERVERS.includes(msg.guild.id)) return;
-  const content = msg.content.toLowerCase();
+client.on('messageCreate', async (message) => {
+  try {
+    if (!message.guild || message.author.bot) return;
+    if (!ALLOWED_SERVERS.includes(message.guild.id)) return;
 
-  // Respuestas rápidas
-  if (content.startsWith('.ip')) {
-    return msg.reply(`╔════════════════════════════════════╗\n      🛡️  CONEXIÓN AL SERVIDOR  🛡️\n╚════════════════════════════════════╝\n\n 🌐 **IP:** play.powerlucky.net\n 📱 **Puerto:** 19132\n\n 🟢 **Estado:** EN LÍNEA`).catch(() => null);
-  }
+    const content = (message.content || '').toLowerCase();
 
-  // XP
-  const xpKey = `${msg.guild.id}|${msg.author.id}`;
-  if ((xpCooldowns.get(xpKey) || 0) < Date.now()) {
-    xpCooldowns.set(xpKey, Date.now() + 60000);
-    if (!xpData[msg.guild.id]) xpData[msg.guild.id] = {};
-    if (!xpData[msg.guild.id][msg.author.id]) xpData[msg.guild.id][msg.author.id] = { xp: 0 };
-    
-    const user = xpData[msg.guild.id][msg.author.id];
-    const oldLvl = Math.floor(user.xp / 100) + 1;
-    user.xp += Math.floor(Math.random() * 10) + 5;
-    xpNeedsSave = true;
-    const newLvl = Math.floor(user.xp / 100) + 1;
+    // Respuestas instantáneas (palabra completa)
+    const containsIp = /\bip\b/i.test(content);
+    const containsTienda = /\btienda\b/i.test(content);
 
-    if (newLvl > oldLvl) {
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.XP).catch(() => null);
-      if (ch) ch.send(fillTemplate(TEMPLATES.LEVELUP, { mención_usuario: `<@${msg.author.id}>`, nivel_anterior: oldLvl, nuevo_nivel: newLvl, xp_total: user.xp }));
+    if (containsIp) {
+      return message.reply(`╔════════════════════════════════════╗
+      🛡️  CONEXIÓN AL SERVIDOR  🛡️
+╚════════════════════════════════════╝
+
+  🌐 **Dirección IP** ➭ ${CONFIG.SERVER_IP}
+  ☕ **Versión Java** ➭ 1.8 - 1.20.x
+  📱 **Bedrock Port** ➭ 19132
+
+  🟢 **Estado** ➭ EN LÍNEA [✔]
+  🌍 **Network** ➭ ${SERVER_NAME}
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
+
+    if (containsTienda) {
+      return message.reply(`╔════════════════════════════════════╗
+       🛒  TIENDA DE LA NETWORK  🛒
+╚════════════════════════════════════╝
+
+  🛍️ **Link** ➭ ${CONFIG.STORE_URL}
+  💎 **Rangos** ➭ VIP, MVP, ELITE
+
+  🛡️ **Soporte** ➭ ${SERVER_NAME}
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    }
+
+    // XP system (después)
+    const xpKey = `${message.guild.id}|${message.author.id}`;
+    const now = Date.now();
+    if ((xpCooldowns.get(xpKey) || 0) < now) {
+      xpCooldowns.set(xpKey, now + 60_000);
+      if (!xpData[message.guild.id]) xpData[message.guild.id] = {};
+      if (!xpData[message.guild.id][message.author.id]) xpData[message.guild.id][message.author.id] = { xp: 0 };
+      const user = xpData[message.guild.id][message.author.id];
+      const oldLevel = Math.floor(user.xp / 100) + 1;
+      user.xp += Math.floor(Math.random() * 11) + 5;
+      xpNeedsSave = true;
+      const newLevel = Math.floor(user.xp / 100) + 1;
+      if (newLevel > oldLevel) {
+        const ch = await client.channels.fetch(CONFIG.CHANNELS.XP).catch(() => null);
+        if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.LEVELUP, { 'mención_usuario': `<@${message.author.id}>`, 'nivel_anterior': oldLevel, 'nuevo_nivel': newLevel, 'xp_total': user.xp, 'nombre_rol_recompensa': '—' }) }).catch(() => null);
+      }
+    }
+
+  } catch (e) {
+    console.error('Error en messageCreate:', e);
   }
 });
 
-/* ───────── BIENVENIDAS ───────── */
+/* ---------- WELCOME / LEAVE ---------- */
 client.on('guildMemberAdd', async (m) => {
-  if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
-  const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
-  if (ch) ch.send(fillTemplate(TEMPLATES.WELCOME, { mención_usuario: `<@${m.id}>`, fecha_ingreso: formatDate(Date.now()) }));
+  try {
+    if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
+    const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
+    if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.WELCOME, { 'mención_usuario': `<@${m.user.id}>`, 'fecha_ingreso': formatDate(Date.now()) }) }).catch(() => null);
+  } catch (e) {
+    console.error('Error welcome:', e);
+  }
 });
 
-/* ───────── SERVER WEB ───────── */
+client.on('guildMemberRemove', async (m) => {
+  try {
+    if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
+    const ch = await client.channels.fetch(CONFIG.CHANNELS.LEAVE).catch(() => null);
+    if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.LEAVE, { 'nombre_usuario': m.user?.username || `${m.user.id}` }) }).catch(() => null);
+  } catch (e) {
+    console.error('Error leave:', e);
+  }
+});
+
+/* ---------- WEB & LOGIN ---------- */
 const app = express();
-app.get('/', (req, res) => res.send('Bot Online 🚀'));
+app.get('/', (_, res) => res.send(`${SERVER_NAME} Bot Online 🚀`));
 app.listen(process.env.PORT || 10000);
 
-client.login(CONFIG.TOKEN);
+client.login(CONFIG.TOKEN).catch(e => {
+  console.error('Error login:', e);
+  process.exit(1);
+});
