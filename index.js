@@ -1,4 +1,4 @@
-// index.js — Power Lucky Network (completo, con todos los canales)
+// index.js — Power Lucky Network (con emojis personalizados integrados)
 import 'dotenv/config';
 import express from 'express';
 import fs from 'fs/promises';
@@ -37,6 +37,24 @@ const CONFIG = {
   },
   SERVER_IP: 'play.powerlucky.net',
   STORE_URL: 'tienda.powerlucky.net'
+};
+
+/* ---------- EMOJIS (del listado que enviaste) ---------- */
+const EMOJIS = {
+  JAVA: '<:java:1433671645339455628>',
+  BEDROCK: '<:bedrock:1433671700536365139>',
+  SHIELD: '<:TwoToneShield_IDS:1343068309918187592>',
+  STATUS_ON: '<:emoji_49:1433671234725478450>',
+  STATUS_NET: '<:emoji_46:1450950369290092626>',
+  TIENDA: '<:Tienda:1462705356428939410>',
+  MINECOINS: '<:Minecoins:1343058654114349087>',
+  GOLD_EIGHT: '<:minecraft_gold_eight:1343066113596199016>',
+  GOLD_LT: '<:minecraft_gold_less_than:1343058687748473044>',
+  GOLD_GT: '<:minecraft_gold_greater_than:1343058673412345947>',
+  EMOJI_50: '<:emoji_50:1433671336311521331>',
+  MANTE: '<:mante:1343068275998986240>',
+  HEART: '<:MinecraftHeart:1343065608497135698>',
+  HARDCORE: '<:hardcore:1343056335599833139>'
 };
 
 /* ---------- FILES & PERSISTENCE ---------- */
@@ -94,13 +112,13 @@ function fillTemplate(template, map) {
   return out;
 }
 
-/* ---------- TEMPLATES ---------- */
+/* ---------- TEMPLATES (usando emojis) ---------- */
 const TEMPLATES = {
   BAN: `╔════════════════════════════════════╗
       🚫 USUARIO BANEADO 🚫
 ╚════════════════════════════════════╝
 
-  ●--👤 Usuario: <mención_usuario>
+  ${EMOJIS.SHIELD}  ●--👤 Usuario: <mención_usuario>
   ●--🆔 ID: <id_del_usuario>
   ●--⚖️ Razón: <razón_del_ban>
   ●--🛡️ Moderador: <moderador>
@@ -112,7 +130,7 @@ const TEMPLATES = {
       ⏳ ACCESO SUSPENDIDO ⏳
 ╚════════════════════════════════════╝
 
-  ●--👤 Usuario: <mención_usuario>
+  ${EMOJIS.SHIELD}  ●--👤 Usuario: <mención_usuario>
   ●--🆔 ID: <id_del_usuario>
   ●--⚖️ Razón: <razón_del_ban>
   ●--⏱️ Duración: <tiempo>
@@ -125,7 +143,7 @@ const TEMPLATES = {
       🔇 USUARIO SILENCIADO 🔇
 ╚════════════════════════════════════╝
 
-  ●--👤 Usuario: <mención_usuario>
+  ${EMOJIS.EMOJI_50}  ●--👤 Usuario: <mención_usuario>
   ●--⚖️ Razón: <razón_del_mute>
   ●--⏱️ Tiempo: <duración_del_mute>
   ●--🛡️ Moderador: <moderador>
@@ -137,7 +155,7 @@ const TEMPLATES = {
       🔊 SILENCIO REMOVIDO 🔊
 ╚════════════════════════════════════╝
 
-  ●--👤 Usuario: <mención_usuario>
+  ${EMOJIS.HEART}  ●--👤 Usuario: <mención_usuario>
   ●--🛡️ Moderador: <moderador>
 
   _¡Ya puedes hablar de nuevo!_
@@ -147,7 +165,7 @@ const TEMPLATES = {
       🔓 ACCESO RESTABLECIDO 🔓
 ╚════════════════════════════════════╝
 
-  🔹 Usuario ➭ <mención_usuario>
+  ${EMOJIS.GOLD_EIGHT}  🔹 Usuario ➭ <mención_usuario>
   🔹 ID      ➭ <id_del_usuario>
   🔹 Estado  ➭ RE-ADMITIDO [✔]
   🔹 Soporte ➭ ${SERVER_NAME}
@@ -159,7 +177,7 @@ const TEMPLATES = {
      💎 ${SERVER_NAME} 💎
 ╚════════════════════════════════════╝
 
-  🔹 Usuario ➭ <mención_usuario>
+  ${EMOJIS.MANTE}  🔹 Usuario ➭ <mención_usuario>
   🔹 Acceso  ➭ AUTORIZADO [✔]
   🔹 Fecha   ➭ <fecha_ingreso>
 
@@ -170,7 +188,7 @@ const TEMPLATES = {
      🛫 SALIDA DE LA NETWORK 🛫
 ╚════════════════════════════════════╝
 
-  🔹 Usuario ➭ <nombre_usuario>
+  ${EMOJIS.HARDCORE}  🔹 Usuario ➭ <nombre_usuario>
   🔹 Estado  ➭ DESCONECTADO [❌]
   🔹 Lugar   ➭ ${SERVER_NAME}
 
@@ -181,8 +199,8 @@ const TEMPLATES = {
       🆙 LEVEL UP / NUEVO NIVEL 🆙
 ╚════════════════════════════════════╝
 
-  🔹 Usuario ➭ <mención_usuario>
-  🔹 Nivel   ➭ <nivel_anterior> ➔ ⭐ <nuevo_nivel>
+  ${EMOJIS.HEART}  🔹 Usuario ➭ <mención_usuario>
+  🔹 Nivel   ➭ <nivel_anterior> ➔ ${EMOJIS.GOLD_EIGHT} <nuevo_nivel>
   🔹 XP Total➭ <xp_total>
   🔹 Rol     ➭ <nombre_rol_recompensa>
 
@@ -211,7 +229,7 @@ async function performUnban(guildId, userId) {
     await guild.bans.remove(userId, 'Tempban expirado').catch(() => null);
     const ch = await client.channels.fetch(CONFIG.CHANNELS.TEMPBAN).catch(() => null);
     if (ch?.isTextBased()) {
-      await ch.send({ content: `🔔 Usuario <@${userId}> desbaneado automáticamente (tempban expirado).` }).catch(() => null);
+      await ch.send({ content: `🔔 ${EMOJIS.STATUS_ON} Usuario <@${userId}> desbaneado automáticamente (tempban expirado).` }).catch(() => null);
     }
   } catch (e) {
     console.error('performUnban error:', e);
@@ -324,7 +342,7 @@ client.once(Events.ClientReady, async () => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand() || !ALLOWED_SERVERS.includes(interaction.guildId)) return;
   const { commandName, options } = interaction;
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: true }).catch(() => null);
 
   try {
     // anuncio / nuevo / cambios
@@ -408,28 +426,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // ip
     if (commandName === 'ip') {
       return interaction.editReply(`╔════════════════════════════════════╗
-      🛡️  CONEXIÓN AL SERVIDOR  🛡️
+      ${EMOJIS.SHIELD}  🛡️  CONEXIÓN AL SERVIDOR  ${EMOJIS.STATUS_ON}
 ╚════════════════════════════════════╝
 
-  🌐 **Dirección IP** ➭ ${CONFIG.SERVER_IP}
-  ☕ **Versión Java** ➭ 1.8 - 1.20.x
-  📱 **Bedrock Port** ➭ 19132
+  ${EMOJIS.JAVA} **Java:** 1.8 - 1.20.x
+  ${EMOJIS.BEDROCK} **Bedrock Port:** 19132
+  🌐 **IP:** ${CONFIG.SERVER_IP}
 
-  🟢 **Estado** ➭ EN LÍNEA [✔]
-  🌍 **Network** ➭ ${SERVER_NAME}
+  ${EMOJIS.STATUS_ON} **Estado:** EN LÍNEA [✔]
+  ${EMOJIS.STATUS_NET} **Network:** ${SERVER_NAME}
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
 
     // tienda
     if (commandName === 'tienda') {
       return interaction.editReply(`╔════════════════════════════════════╗
-       🛒  TIENDA DE LA NETWORK  🛒
+       ${EMOJIS.TIENDA}  🛒  TIENDA DE LA NETWORK  ${EMOJIS.MINECOINS}
 ╚════════════════════════════════════╝
 
-  🛍️ **Link** ➭ ${CONFIG.STORE_URL}
-  💎 **Rangos** ➭ VIP, MVP, ELITE
+  ${EMOJIS.TIENDA} **Link** ➭ ${CONFIG.STORE_URL}
+  ${EMOJIS.MINECOINS} **Moneda** ➭ USD / EUR / MXN
+  ${EMOJIS.GOLD_EIGHT} **Rangos** ➭ VIP, MVP, ELITE
 
-  🛡️ **Soporte** ➭ ${SERVER_NAME}
+  ${EMOJIS.GOLD_LT} 💎 APOYA AL SERVIDOR ${EMOJIS.GOLD_GT}
+
+  ${EMOJIS.STATUS_NET} **Soporte** ➭ ${SERVER_NAME}
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
 
@@ -455,27 +476,30 @@ client.on('messageCreate', async (message) => {
 
     if (containsIp) {
       return message.reply(`╔════════════════════════════════════╗
-      🛡️  CONEXIÓN AL SERVIDOR  🛡️
+      ${EMOJIS.SHIELD}  🛡️  CONEXIÓN AL SERVIDOR  ${EMOJIS.STATUS_ON}
 ╚════════════════════════════════════╝
 
-  🌐 **Dirección IP** ➭ ${CONFIG.SERVER_IP}
-  ☕ **Versión Java** ➭ 1.8 - 1.20.x
-  📱 **Bedrock Port** ➭ 19132
+  ${EMOJIS.JAVA} **Java:** 1.8 - 1.20.x
+  ${EMOJIS.BEDROCK} **Bedrock Port:** 19132
+  🌐 **IP:** ${CONFIG.SERVER_IP}
 
-  🟢 **Estado** ➭ EN LÍNEA [✔]
-  🌍 **Network** ➭ ${SERVER_NAME}
+  ${EMOJIS.STATUS_ON} **Estado:** EN LÍNEA [✔]
+  ${EMOJIS.STATUS_NET} **Network:** ${SERVER_NAME}
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
 
     if (containsTienda) {
       return message.reply(`╔════════════════════════════════════╗
-       🛒  TIENDA DE LA NETWORK  🛒
+       ${EMOJIS.TIENDA}  🛒  TIENDA DE LA NETWORK  ${EMOJIS.MINECOINS}
 ╚════════════════════════════════════╝
 
-  🛍️ **Link** ➭ ${CONFIG.STORE_URL}
-  💎 **Rangos** ➭ VIP, MVP, ELITE
+  ${EMOJIS.TIENDA} **Link** ➭ ${CONFIG.STORE_URL}
+  ${EMOJIS.MINECOINS} **Moneda** ➭ USD / EUR / MXN
+  ${EMOJIS.GOLD_EIGHT} **Rangos** ➭ VIP, MVP, ELITE
 
-  🛡️ **Soporte** ➭ ${SERVER_NAME}
+  ${EMOJIS.GOLD_LT} 💎 APOYA AL SERVIDOR ${EMOJIS.GOLD_GT}
+
+  ${EMOJIS.STATUS_NET} **Soporte** ➭ ${SERVER_NAME}
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
 
