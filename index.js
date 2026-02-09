@@ -26,15 +26,15 @@ const CONFIG = {
   CHANNELS: {
     ANUNCIOS: '1340756895618699416',
     NUEVO: '1340757162573562007',
-    BANS: '1340453829124034580',                 // canal de baneos (logs)
-    TEMPBAN: '1457911150854541423',             // canal tempban
-    MUTE: '1453435158563913820',                // canal mute
-    UNMUTE: '1453521869968769106',              // canal unmute
-    UNBAN: '1457912738473967790',               // canal unban (nuevo)
-    CAMBIOS: '1340757615407272068',             // canal /cambios (nuevo)
-    XP: '1340500687670476810',                  // canal log niveles/xp
-    WELCOME: '1340454070070022205',             // canal bienvenida
-    LEAVE: '1340475418091847791'                // canal despedida
+    BANS: '1340453829124034580',
+    TEMPBAN: '1457911150854541423',
+    MUTE: '1453435158563913820',
+    UNMUTE: '1453521869968769106',
+    UNBAN: '1457912738473967790',
+    CAMBIOS: '1340757615407272068',
+    XP: '1340500687670476810',
+    WELCOME: '1340454070070022205',
+    LEAVE: '1340475418091847791'
   },
   SERVER_IP: process.env.SERVER_IP || 'play.tuservidor.com',
   SERVER_PORT: process.env.SERVER_PORT || '19132',
@@ -65,7 +65,6 @@ const writeJSON = (file, data) => {
   }
 };
 
-// parseDuration: acepta formatos "7d", "12h", "30m", "1d12h", o solo número -> días
 function parseDuration(str) {
   if (!str) return null;
   str = String(str).trim().toLowerCase();
@@ -79,20 +78,17 @@ function parseDuration(str) {
     if (unit === 'h') totalMs += n * 60 * 60 * 1000;
     if (unit === 'm') totalMs += n * 60 * 1000;
   }
-  // si no hay coincidencias y es numérico, lo tomamos como dias
   if (totalMs === 0 && /^\d+$/.test(str)) {
     totalMs = Number(str) * 24 * 60 * 60 * 1000;
   }
   return totalMs > 0 ? totalMs : null;
 }
 
-// formatea fecha legible para "Expira" o "Fecha ingreso"
 function formatDateISO(ts) {
   const d = new Date(ts);
   return d.toLocaleString('es-ES', { timeZone: 'America/Tegucigalpa', dateStyle: 'medium', timeStyle: 'short' });
 }
 
-// reemplazo de plantilla
 function fillTemplate(template, map) {
   let out = template;
   for (const k in map) {
@@ -101,101 +97,17 @@ function fillTemplate(template, map) {
   return out;
 }
 
-/* ───────── TEMPLATES ───────── */
 const TEMPLATES = {
-  BAN: `╔════════════════════════════════════╗
-      🚫 USUARIO BANEADO 🚫
-╚════════════════════════════════════╝
-
-  ●--👤 Usuario: <mención_usuario>
-  ●--🆔 ID: <id_del_usuario>
-  ●--⚖️ Razón: <razón_del_ban>
-  ●--🛡️ Moderador: <moderador>
-
-  _¡Las reglas se respetan!_
-  ------------------------------------`,
-  TEMPBAN: `╔════════════════════════════════════╗
-      ⏳ ACCESO SUSPENDIDO ⏳
-╚════════════════════════════════════╝
-
-  ●--👤 Usuario: <mención_usuario>
-  ●--🆔 ID: <id_del_usuario>
-  ●--⚖️ Razón: <razón_del_ban>
-  ●--⏱️ Duración: <tiempo_ej_7_días>
-  ●--📅 Expira: <fecha_de_desban>
-
-  _¡Cumple tu tiempo y vuelve mejor!_
-  ------------------------------------`,
-  MUTE: `╔════════════════════════════════════╗
-      🔇 USUARIO SILENCIADO 🔇
-╚════════════════════════════════════╝
-
-  ●--👤 Usuario: <mención_usuario>
-  ●--🆔 ID: <id_del_usuario>
-  ●--⚖️ Razón: <razón_del_mute>
-  ●--⏱️ Tiempo: <duración_del_mute>
-  ●--🛡️ Moderador: <moderador>
-
-  _¡Shhh! Medita tus palabras._
-  ------------------------------------`,
-  UNMUTE: `╔════════════════════════════════════╗
-      🔊 SILENCIO REMOVIDO 🔊
-╚════════════════════════════════════╝
-
-  ●--👤 Usuario: <mención_usuario>
-  ●--🆔 ID: <id_del_usuario>
-  ●--⚖️ Razón: <razón_del_unmute>
-  ●--🛡️ Moderador: <moderador>
-
-  _¡Ya puedes hablar de nuevo!_
-  ------------------------------------`,
-  UNBAN: `╔════════════════════════════════════╗
-      🔓 ACCESO RESTABLECIDO 🔓
-╚════════════════════════════════════╝
-
-  🔹 Usuario ➭ <mención_usuario>
-  🔹 ID      ➭ <id_del_usuario>
-  🔹 Estado  ➭ RE-ADMITIDO [✔]
-  🔹 Soporte ➭ Power Lukcy Network
-
-  _✨ ¡Bienvenido de vuelta! Sigue las reglas._
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-  WELCOME: `╔════════════════════════════════════╗
-     💎 POWER LUKCY NETWORK 💎
-╚════════════════════════════════════╝
-
-  🔹 Usuario ➭ <mención_usuario>
-  🔹 Acceso  ➭ AUTORIZADO [✔]
-  🔹 Rol     ➭ Nuevo Miembro
-  🔹 Fecha   ➭ <fecha_ingreso>
-
-  _🥂 Bienvenido a la elite. ¡Diviértete!_
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-  LEAVE: `╔════════════════════════════════════╗
-     🛫 SALIDA DE LA NETWORK 🛫
-╚════════════════════════════════════╝
-
-  🔹 Usuario ➭ <nombre_usuario>
-  🔹 Estado  ➭ DESCONECTADO [❌]
-  🔹 Lugar   ➭ Power Lukcy Network
-  🔹 Fecha   ➭ <fecha_salida>
-
-  _👋 Esperamos verte regresar pronto._
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-  LEVELUP: `╔════════════════════════════════════╗
-      🆙 LEVEL UP / NUEVO NIVEL 🆙
-╚════════════════════════════════════╝
-
-  🔹 Usuario ➭ <mención_usuario>
-  🔹 Nivel   ➭ <nivel_anterior> ➔ ⭐ <nuevo_nivel>
-  🔹 XP Total➭ <xp_total>
-  🔹 Rol     ➭ <nombre_rol_recompensa>
-
-  _🔥 ¡Imparable! Sigue chateando._
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  BAN: `╔════════════════════════════════════╗\n      🚫 USUARIO BANEADO 🚫\n╚════════════════════════════════════╝\n\n  ●--👤 Usuario: <mención_usuario>\n  ●--🆔 ID: <id_del_usuario>\n  ●--⚖️ Razón: <razón_del_ban>\n  ●--🛡️ Moderador: <moderador>\n\n  _¡Las reglas se respetan!_\n  ------------------------------------`,
+  TEMPBAN: `╔════════════════════════════════════╗\n      ⏳ ACCESO SUSPENDIDO ⏳\n╚════════════════════════════════════╝\n\n  ●--👤 Usuario: <mención_usuario>\n  ●--🆔 ID: <id_del_usuario>\n  ●--⚖️ Razón: <razón_del_ban>\n  ●--⏱️ Duración: <tiempo_ej_7_días>\n  ●--📅 Expira: <fecha_de_desban>\n\n  _¡Cumple tu tiempo y vuelve mejor!_\n  ------------------------------------`,
+  MUTE: `╔════════════════════════════════════╗\n      🔇 USUARIO SILENCIADO 🔇\n╚════════════════════════════════════╝\n\n  ●--👤 Usuario: <mención_usuario>\n  ●--🆔 ID: <id_del_usuario>\n  ●--⚖️ Razón: <razón_del_mute>\n  ●--⏱️ Tiempo: <duración_del_mute>\n  ●--🛡️ Moderador: <moderador>\n\n  _¡Shhh! Medita tus palabras._\n  ------------------------------------`,
+  UNMUTE: `╔════════════════════════════════════╗\n      🔊 SILENCIO REMOVIDO 🔊\n╚════════════════════════════════════╝\n\n  ●--👤 Usuario: <mención_usuario>\n  ●--🆔 ID: <id_del_usuario>\n  ●--⚖️ Razón: <razón_del_unmute>\n  ●--🛡️ Moderador: <moderador>\n\n  _¡Ya puedes hablar de nuevo!_\n  ------------------------------------`,
+  UNBAN: `╔════════════════════════════════════╗\n      🔓 ACCESO RESTABLECIDO 🔓\n╚════════════════════════════════════╝\n\n  🔹 Usuario ➭ <mención_usuario>\n  🔹 ID      ➭ <id_del_usuario>\n  🔹 Estado  ➭ RE-ADMITIDO [✔]\n  🔹 Soporte ➭ Power Lukcy Network\n\n  _✨ ¡Bienvenido de vuelta! Sigue las reglas._\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  WELCOME: `╔════════════════════════════════════╗\n     💎 POWER LUKCY NETWORK 💎\n╚════════════════════════════════════╝\n\n  🔹 Usuario ➭ <mención_usuario>\n  🔹 Acceso  ➭ AUTORIZADO [✔]\n  🔹 Rol     ➭ Nuevo Miembro\n  🔹 Fecha   ➭ <fecha_ingreso>\n\n  _🥂 Bienvenido a la elite. ¡Diviértete!_\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  LEAVE: `╔════════════════════════════════════╗\n     🛫 SALIDA DE LA NETWORK 🛫\n╚════════════════════════════════════╝\n\n  🔹 Usuario ➭ <nombre_usuario>\n  🔹 Estado  ➭ DESCONECTADO [❌]\n  🔹 Lugar   ➭ Power Lukcy Network\n  🔹 Fecha   ➭ <fecha_salida>\n\n  _👋 Esperamos verte regresar pronto._\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  LEVELUP: `╔════════════════════════════════════╗\n      🆙 LEVEL UP / NUEVO NIVEL 🆙\n╚════════════════════════════════════╝\n\n  🔹 Usuario ➭ <mención_usuario>\n  🔹 Nivel   ➭ <nivel_anterior> ➔ ⭐ <nuevo_nivel>\n  🔹 XP Total➭ <xp_total>\n  🔹 Rol     ➭ <nombre_rol_recompensa>\n\n  _🔥 ¡Imparable! Sigue chateando._\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
 };
 
-/* ───────── CLIENTE ───────── */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -206,18 +118,14 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
-/* ───────── DATOS PERSISTENTES EN MEMORIA ───────── */
-let tempBans = readJSON(TEMPBANS_FILE, {}); // { "<guildId>|<userId>": { expiresAt, reason, moderatorId } }
-let xpData = readJSON(XP_FILE, {}); // { "<guildId>": { "<userId>": { xp, lastTime } } }
-
-// helpers para programar desban
-const scheduledUnbans = new Map(); // key -> timeout
+let tempBans = readJSON(TEMPBANS_FILE, {});
+let xpData = readJSON(XP_FILE, {});
+const scheduledUnbans = new Map();
 
 function scheduleUnban(guildId, userId, expiresAt) {
   const key = `${guildId}|${userId}`;
   const ms = expiresAt - Date.now();
   if (ms <= 0) {
-    // expirar inmediatamente
     performUnban(guildId, userId).catch(console.error);
     delete tempBans[key];
     writeJSON(TEMPBANS_FILE, tempBans);
@@ -243,7 +151,6 @@ async function performUnban(guildId, userId) {
     const guild = await client.guilds.fetch(guildId).catch(() => null);
     if (!guild) return;
     await guild.bans.remove(userId, 'Expiración de tempban').catch(() => null);
-    // log en canal de tempban/unban (usamos CHANNELS.TEMPBAN)
     const ch = await client.channels.fetch(CONFIG.CHANNELS.TEMPBAN).catch(() => null);
     if (ch && ch.isTextBased()) {
       await ch.send(`🔔 Usuario <@${userId}> desbaneado automáticamente (tempban expirado).`).catch(() => null);
@@ -253,12 +160,10 @@ async function performUnban(guildId, userId) {
   }
 }
 
-/* ───────── READY: sincroniza comandos y reprograma tempbans ───────── */
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot conectado como ${client.user.tag}`);
   client.user.setActivity('Power Luki Network', { type: ActivityType.Playing });
 
-  // Registrar comandos (añadimos ban/tempban/mute/unmute/cambios/unban)
   const commands = [
     new SlashCommandBuilder()
       .setName('anuncio')
@@ -321,7 +226,6 @@ client.once(Events.ClientReady, async () => {
     console.error('❌ Error registrando comandos:', err);
   }
 
-  // Reprogramar tempbans cargadas desde archivo
   for (const key of Object.keys(tempBans)) {
     const entry = tempBans[key];
     const [guildId, userId] = key.split('|');
@@ -331,14 +235,12 @@ client.once(Events.ClientReady, async () => {
   }
 });
 
-/* ───────── INTERACCIONES ───────── */
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   if (!ALLOWED_SERVERS.includes(interaction.guildId)) return;
 
   const { commandName, options, member } = interaction;
 
-  // comandos que ya tenías: anuncio / nuevo / cambios
   if (commandName === 'anuncio' || commandName === 'nuevo' || commandName === 'cambios') {
     await interaction.deferReply({ ephemeral: true });
     const raw = options.getString('mensaje', true);
@@ -359,7 +261,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // Moderación: ban
   if (commandName === 'ban') {
     await interaction.deferReply({ ephemeral: true });
     if (!member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
@@ -369,7 +270,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const reason = options.getString('razon') || 'Sin razón especificada';
     try {
       await interaction.guild.members.ban(target.id, { reason }).catch(e => { throw e; });
-      // log en canal de bans
       const template = TEMPLATES.BAN;
       const text = fillTemplate(template, {
         'mención_usuario': `<@${target.id}>`,
@@ -386,7 +286,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // tempban
   if (commandName === 'tempban') {
     await interaction.deferReply({ ephemeral: true });
     if (!member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
@@ -404,7 +303,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       tempBans[key] = { expiresAt, reason, moderatorId: interaction.user.id };
       writeJSON(TEMPBANS_FILE, tempBans);
       scheduleUnban(interaction.guildId, target.id, expiresAt);
-      // log en canal tempban
       const template = TEMPLATES.TEMPBAN;
       const text = fillTemplate(template, {
         'mención_usuario': `<@${target.id}>`,
@@ -423,7 +321,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // mute (timeout)
   if (commandName === 'mute') {
     await interaction.deferReply({ ephemeral: true });
     if (!member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
@@ -438,7 +335,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const guildMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
       if (!guildMember) return interaction.editReply('❌ No se encontró al miembro en el servidor.');
       await guildMember.timeout(ms, `Mute por ${interaction.user.tag}: ${reason}`).catch(e => { throw e; });
-      // log en canal mute
       const template = TEMPLATES.MUTE;
       const text = fillTemplate(template, {
         'mención_usuario': `<@${targetUser.id}>`,
@@ -456,7 +352,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // unmute
   if (commandName === 'unmute') {
     await interaction.deferReply({ ephemeral: true });
     if (!member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
@@ -468,7 +363,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const guildMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
       if (!guildMember) return interaction.editReply('❌ No se encontró al miembro en el servidor.');
       await guildMember.timeout(null, `Unmute por ${interaction.user.tag}: ${reason}`).catch(e => { throw e; });
-      // log en canal unmute
       const template = TEMPLATES.UNMUTE;
       const text = fillTemplate(template, {
         'mención_usuario': `<@${targetUser.id}>`,
@@ -485,20 +379,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // unban (nuevo)
   if (commandName === 'unban') {
     await interaction.deferReply({ ephemeral: true });
-
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
       return interaction.editReply('❌ No tienes permiso para desbanear usuarios.');
     }
-
     const userId = options.getString('userid', true);
-
     try {
       await interaction.guild.bans.remove(userId, `Unban por ${interaction.user.tag}`);
-
-      // eliminar tempban persistente si existe
       const key = `${interaction.guildId}|${userId}`;
       if (tempBans[key]) {
         delete tempBans[key];
@@ -508,17 +396,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
           scheduledUnbans.delete(key);
         }
       }
-
       const text = fillTemplate(TEMPLATES.UNBAN, {
         'mención_usuario': `<@${userId}>`,
         'id_del_usuario': userId
       });
-
       const ch = await client.channels.fetch(CONFIG.CHANNELS.UNBAN).catch(() => null);
-      if (ch && ch.isTextBased()) {
-        await ch.send({ content: text }).catch(() => null);
-      }
-
+      if (ch && ch.isTextBased()) await ch.send({ content: text }).catch(() => null);
       return interaction.editReply(`✅ Usuario <@${userId}> desbaneado correctamente.`);
     } catch (e) {
       console.error('Error unban:', e);
@@ -527,60 +410,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-/* ───────── MENSAJES (xp, respuestas rápidas, ip/tienda) ───────── */
-const xpCooldowns = new Map(); // "<guildId>|<userId>" -> timestamp
+const xpCooldowns = new Map();
 
 client.on('messageCreate', async (message) => {
   if (!message.guild || message.author.bot) return;
   if (!ALLOWED_SERVERS.includes(message.guild.id)) return;
-
   const content = message.content.toLowerCase();
 
-  // RESPUESTAS IP / TIENDA (DISEÑO PREMIUM)
   if (['.ip', ':ip', '-ip', '_ip'].some(cmd => content.startsWith(cmd))) {
-    const msgIP = `╔════════════════════════════════════╗
-      🛡️ CONEXIÓN AL SERVIDOR 🛡️
-╚════════════════════════════════════╝
-
-  <:ip:> **Dirección IP** ➭ play.powerlucky.net
-  <:java:> **Versión Java** ➭ 1.8 - 1.20.x
-  <:bedrock:> **Bedrock Port** ➭ 19132
-
-  <:emoji_49:> **Estado** ➭ EN LÍNEA [✔]
-  <:emoji_46:> **Network** ➭ Power Lukcy
-
-  _✨ ¡Te esperamos dentro del juego!_
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    const msgIP = `╔════════════════════════════════════╗\n      🛡️ CONEXIÓN AL SERVIDOR 🛡️\n╚════════════════════════════════════╝\n\n  <:ip:> **Dirección IP** ➭ play.powerlucky.net\n  <:java:> **Versión Java** ➭ 1.8 - 1.20.x\n  <:bedrock:> **Bedrock Port** ➭ 19132\n\n  <:emoji_49:> **Estado** ➭ EN LÍNEA [✔]\n  <:emoji_46:> **Network** ➭ Power Lukcy\n\n  _✨ ¡Te esperamos dentro del juego!_\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     return message.reply({ content: msgIP }).catch(() => null);
   }
 
   if (['.tienda', ':tienda', '-tienda', '_tienda'].some(cmd => content.startsWith(cmd))) {
-    const msgTienda = `╔════════════════════════════════════╗
-       🛒 TIENDA DE LA NETWORK 🛒
-╚════════════════════════════════════╝
-
-  <:Tienda:> **Link** ➭ tienda.powerlucky.net
-  <:Minecoins:> **Moneda** ➭ USD / EUR / MXN
-  <:minecraft_gold_eight:> **Rangos** ➭ VIP, MVP, ELITE
-
-  <:minecraft_gold_less_than:> 💎 APOYA AL SERVIDOR <:minecraft_gold_greater_than:>
-
-  <:emoji_46:> **Soporte** ➭ Power Lukcy Network
-
-  _🥂 ¡Obtén beneficios y ayuda a mejorar!_
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    const msgTienda = `╔════════════════════════════════════╗\n       🛒 TIENDA DE LA NETWORK 🛒\n╚════════════════════════════════════╝\n\n  <:Tienda:> **Link** ➭ tienda.powerlucky.net\n  <:Minecoins:> **Moneda** ➭ USD / EUR / MXN\n  <:minecraft_gold_eight:> **Rangos** ➭ VIP, MVP, ELITE\n\n  <:minecraft_gold_less_than:> 💎 APOYA AL SERVIDOR <:minecraft_gold_greater_than:>\n\n  <:emoji_46:> **Soporte** ➭ Power Lukcy Network\n\n  _🥂 ¡Obtén beneficios y ayuda a mejorar!_\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     return message.reply({ content: msgTienda }).catch(() => null);
   }
 
-  // sistema simple de XP/LEVEL
   try {
     const key = `${message.guild.id}|${message.author.id}`;
     const now = Date.now();
-    const cooldown = 60 * 1000; // 60s por mensaje para evitar spam xp
+    const cooldown = 60 * 1000; // 60s
     const last = xpCooldowns.get(key) || 0;
     if (now - last >= cooldown) {
       xpCooldowns.set(key, now);
-      // asignar xp aleatoria entre 5 y 15
       const gain = Math.floor(Math.random() * 11) + 5;
       if (!xpData[message.guild.id]) xpData[message.guild.id] = {};
       if (!xpData[message.guild.id][message.author.id]) xpData[message.guild.id][message.author.id] = { xp: 0 };
@@ -592,45 +445,6 @@ client.on('messageCreate', async (message) => {
       writeJSON(XP_FILE, xpData);
       const newLevel = Math.floor(newXp / 100) + 1;
       if (newLevel > oldLevel) {
-        // level up: notificar en canal XP
-        const ch = await client.channels.fetch(CONFIG.CHANNELS.XP).catch(() => null);
-        const text = fillTemplate(TEMPLATES.LEVELUP, {
-          'mención_usuario': `<@${message.author.id}>`,
-          'nivel_anterior': oldLevel,
-          'nuevo_nivel': newLevel,
-          'xp_total': newXp,
-          'nombre_rol_recompensa': '—'
-        });
-        if (ch && ch.isTextBased()) await ch.send({ content: text }).catch(() => null);
-      }
-    }
-  } catch (e) {
-    console.error('XP error:', e);
-  }
-});(() => null);
-  }
-
-  // sistema simple de XP/LEVEL
-  try {
-    const key = `${message.guild.id}|${message.author.id}`;
-    const now = Date.now();
-    const cooldown = 60 * 1000; // 60s por mensaje para evitar spam xp
-    const last = xpCooldowns.get(key) || 0;
-    if (now - last >= cooldown) {
-      xpCooldowns.set(key, now);
-      // asignar xp aleatoria entre 5 y 15
-      const gain = Math.floor(Math.random() * 11) + 5;
-      if (!xpData[message.guild.id]) xpData[message.guild.id] = {};
-      if (!xpData[message.guild.id][message.author.id]) xpData[message.guild.id][message.author.id] = { xp: 0 };
-      const userRecord = xpData[message.guild.id][message.author.id];
-      const oldXp = userRecord.xp || 0;
-      const oldLevel = Math.floor(oldXp / 100) + 1;
-      const newXp = oldXp + gain;
-      userRecord.xp = newXp;
-      writeJSON(XP_FILE, xpData);
-      const newLevel = Math.floor(newXp / 100) + 1;
-      if (newLevel > oldLevel) {
-        // level up: notificar en canal XP
         const ch = await client.channels.fetch(CONFIG.CHANNELS.XP).catch(() => null);
         const text = fillTemplate(TEMPLATES.LEVELUP, {
           'mención_usuario': `<@${message.author.id}>`,
@@ -647,7 +461,6 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-/* ───────── BIENVENIDAS / DESPEDIDAS ───────── */
 client.on('guildMemberAdd', async (m) => {
   if (!ALLOWED_SERVERS.includes(m.guild.id)) return;
   const ch = await client.channels.fetch(CONFIG.CHANNELS.WELCOME).catch(() => null);
@@ -670,10 +483,8 @@ client.on('guildMemberRemove', async (m) => {
   ch.send({ content: text }).catch(() => null);
 });
 
-/* ───────── SERVER WEB ───────── */
 const app = express();
 app.get('/', (_, res) => res.send('🤖 Power Lucky Bot Online'));
 app.listen(process.env.PORT || 10000);
 
-/* ───────── LOGIN ───────── */
 client.login(CONFIG.TOKEN);
