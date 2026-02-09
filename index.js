@@ -536,32 +536,78 @@ client.on('messageCreate', async (message) => {
 
   const content = message.content.toLowerCase();
 
-  // RESPUESTAS rápidas que ya tenías
+  // RESPUESTAS IP / TIENDA (DISEÑO PREMIUM)
   if (['.ip', ':ip', '-ip', '_ip'].some(cmd => content.startsWith(cmd))) {
-    const msgIP = [
-      '✨ **P O W E R  L U K I  N E T W O R K** ✨',
-      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
-      ' 🌐 **IP PRINCIPAL** .: _ `' + CONFIG.SERVER_IP + '` _',
-      ' 🔌 **PUERTO BEDROCK** .: _ `' + CONFIG.SERVER_PORT + '` _',
-      ' 🎮 **VERSIONES** .: _ `' + CONFIG.VERSIONS + '` _',
-      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
-      ' > *¡Conexión compatible con Java y Bedrock!*'
-    ].join('\n');
+    const msgIP = `╔════════════════════════════════════╗
+      🛡️ CONEXIÓN AL SERVIDOR 🛡️
+╚════════════════════════════════════╝
+
+  <:ip:> **Dirección IP** ➭ play.powerlucky.net
+  <:java:> **Versión Java** ➭ 1.8 - 1.20.x
+  <:bedrock:> **Bedrock Port** ➭ 19132
+
+  <:emoji_49:> **Estado** ➭ EN LÍNEA [✔]
+  <:emoji_46:> **Network** ➭ Power Lukcy
+
+  _✨ ¡Te esperamos dentro del juego!_
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     return message.reply({ content: msgIP }).catch(() => null);
   }
 
   if (['.tienda', ':tienda', '-tienda', '_tienda'].some(cmd => content.startsWith(cmd))) {
-    const msgTienda = [
-      '🛒 **TIENDA OFICIAL | POWER LUKI**',
-      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
-      ' 🔗 **LINK DIRECTO** .: _ https://powerluki.tebex.io _',
-      ' 💎 **BENEFICIOS** .: _ RANGOS - KEYS - UNBANS _',
-      ' - - - - - - - - - - - - - - - - -',
-      ' 🛡️ **SOPORTE** .: _ Abre un ticket si tienes dudas _',
-      ' ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
-      ' *¡Tu apoyo mantiene el servidor online!* ✨'
-    ].join('\n');
+    const msgTienda = `╔════════════════════════════════════╗
+       🛒 TIENDA DE LA NETWORK 🛒
+╚════════════════════════════════════╝
+
+  <:Tienda:> **Link** ➭ tienda.powerlucky.net
+  <:Minecoins:> **Moneda** ➭ USD / EUR / MXN
+  <:minecraft_gold_eight:> **Rangos** ➭ VIP, MVP, ELITE
+
+  <:minecraft_gold_less_than:> 💎 APOYA AL SERVIDOR <:minecraft_gold_greater_than:>
+
+  <:emoji_46:> **Soporte** ➭ Power Lukcy Network
+
+  _🥂 ¡Obtén beneficios y ayuda a mejorar!_
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     return message.reply({ content: msgTienda }).catch(() => null);
+  }
+
+  // sistema simple de XP/LEVEL
+  try {
+    const key = `${message.guild.id}|${message.author.id}`;
+    const now = Date.now();
+    const cooldown = 60 * 1000; // 60s por mensaje para evitar spam xp
+    const last = xpCooldowns.get(key) || 0;
+    if (now - last >= cooldown) {
+      xpCooldowns.set(key, now);
+      // asignar xp aleatoria entre 5 y 15
+      const gain = Math.floor(Math.random() * 11) + 5;
+      if (!xpData[message.guild.id]) xpData[message.guild.id] = {};
+      if (!xpData[message.guild.id][message.author.id]) xpData[message.guild.id][message.author.id] = { xp: 0 };
+      const userRecord = xpData[message.guild.id][message.author.id];
+      const oldXp = userRecord.xp || 0;
+      const oldLevel = Math.floor(oldXp / 100) + 1;
+      const newXp = oldXp + gain;
+      userRecord.xp = newXp;
+      writeJSON(XP_FILE, xpData);
+      const newLevel = Math.floor(newXp / 100) + 1;
+      if (newLevel > oldLevel) {
+        // level up: notificar en canal XP
+        const ch = await client.channels.fetch(CONFIG.CHANNELS.XP).catch(() => null);
+        const text = fillTemplate(TEMPLATES.LEVELUP, {
+          'mención_usuario': `<@${message.author.id}>`,
+          'nivel_anterior': oldLevel,
+          'nuevo_nivel': newLevel,
+          'xp_total': newXp,
+          'nombre_rol_recompensa': '—'
+        });
+        if (ch && ch.isTextBased()) await ch.send({ content: text }).catch(() => null);
+      }
+    }
+  } catch (e) {
+    console.error('XP error:', e);
+  }
+});(() => null);
   }
 
   // sistema simple de XP/LEVEL
