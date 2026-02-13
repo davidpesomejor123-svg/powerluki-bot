@@ -1,4 +1,4 @@
-// index.js — Power Lucky Network (con emojis personalizados integrados)
+// index.js — Power Lucky Network (Roles Restringidos por ID)
 import 'dotenv/config';
 import express from 'express';
 import fs from 'fs/promises';
@@ -20,6 +20,15 @@ import {
 const SERVER_NAME = 'POWER LUCKY NETWORK';
 const ALLOWED_SERVERS = ['1340442398442127480', '1458243569075884219'];
 
+// 🔥 ROLES PERMITIDOS (Staff Team)
+const ALLOWED_ROLES = [
+  '1340887228431335457', // Owner
+  '1343040895313907805', // Co-owner
+  '1343060398932230246', // Manager
+  '1343093044290916395', // Staff
+  '1343060062851301406'  // Admin
+];
+
 const CONFIG = {
   TOKEN: process.env.TOKEN,
   CHANNELS: {
@@ -39,7 +48,7 @@ const CONFIG = {
   STORE_URL: 'tienda.powerlucky.net'
 };
 
-/* ---------- EMOJIS (del listado que enviaste) ---------- */
+/* ---------- EMOJIS ---------- */
 const EMOJIS = {
   JAVA: '<:java:1433671645339455628>',
   BEDROCK: '<:bedrock:1433671700536365139>',
@@ -79,7 +88,6 @@ async function saveData(file, data) {
   catch (e) { console.error(`Error guardando ${file}:`, e); }
 }
 
-// save XP periodically if needed
 setInterval(() => {
   if (xpNeedsSave) {
     saveData(XP_FILE, xpData);
@@ -112,7 +120,7 @@ function fillTemplate(template, map) {
   return out;
 }
 
-/* ---------- TEMPLATES (usando emojis) ---------- */
+/* ---------- TEMPLATES ---------- */
 const TEMPLATES = {
   BAN: `╔════════════════════════════════════╗
       🚫 USUARIO BANEADO 🚫
@@ -174,23 +182,23 @@ const TEMPLATES = {
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
 
   WELCOME: `╔════════════════════════════════════╗
-     💎 ${SERVER_NAME} 💎
+      💎 ${SERVER_NAME} 💎
 ╚════════════════════════════════════╝
 
   ${EMOJIS.MANTE}  🔹 Usuario ➭ <mención_usuario>
   🔹 Acceso  ➭ AUTORIZADO [✔]
-  🔹 Fecha   ➭ <fecha_ingreso>
+  🔹 Fecha    ➭ <fecha_ingreso>
 
   _🥂 Bienvenido a la elite. ¡Diviértete!_
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
 
   LEAVE: `╔════════════════════════════════════╗
-     🛫 SALIDA DE LA NETWORK 🛫
+      🛫 SALIDA DE LA NETWORK 🛫
 ╚════════════════════════════════════╝
 
   ${EMOJIS.HARDCORE}  🔹 Usuario ➭ <nombre_usuario>
   🔹 Estado  ➭ DESCONECTADO [❌]
-  🔹 Lugar   ➭ ${SERVER_NAME}
+  🔹 Lugar    ➭ ${SERVER_NAME}
 
   _👋 Esperamos verte regresar pronto._
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -200,9 +208,9 @@ const TEMPLATES = {
 ╚════════════════════════════════════╝
 
   ${EMOJIS.HEART}  🔹 Usuario ➭ <mención_usuario>
-  🔹 Nivel   ➭ <nivel_anterior> ➔ ${EMOJIS.GOLD_EIGHT} <nuevo_nivel>
+  🔹 Nivel    ➭ <nivel_anterior> ➔ ${EMOJIS.GOLD_EIGHT} <nuevo_nivel>
   🔹 XP Total➭ <xp_total>
-  🔹 Rol     ➭ <nombre_rol_recompensa>
+  🔹 Rol      ➭ <nombre_rol_recompensa>
 
   _🔥 ¡Imparable! Sigue chateando._
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
@@ -260,21 +268,26 @@ client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot conectado como ${client.user.tag}`);
   client.user.setActivity(`${SERVER_NAME}`, { type: ActivityType.Playing });
 
+  // Nota: Dejé PermissionsBitField para mantener la apariencia en Discord, 
+  // pero el filtro fuerte está en el evento InteractionCreate.
   const commands = [
     new SlashCommandBuilder()
       .setName('anuncio')
       .setDescription('Enviar anuncio oficial')
-      .addStringOption(o => o.setName('mensaje').setDescription('Texto del anuncio (usa doble espacio para salto)').setRequired(true)),
+      .addStringOption(o => o.setName('mensaje').setDescription('Texto del anuncio (usa doble espacio para salto)').setRequired(true))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
 
     new SlashCommandBuilder()
       .setName('nuevo')
       .setDescription('Enviar novedad')
-      .addStringOption(o => o.setName('mensaje').setDescription('Texto de la novedad (usa doble espacio para salto)').setRequired(true)),
+      .addStringOption(o => o.setName('mensaje').setDescription('Texto de la novedad (usa doble espacio para salto)').setRequired(true))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
 
     new SlashCommandBuilder()
       .setName('cambios')
       .setDescription('Publicar cambios en canal de cambios')
-      .addStringOption(o => o.setName('mensaje').setDescription('Describe los cambios').setRequired(true)),
+      .addStringOption(o => o.setName('mensaje').setDescription('Describe los cambios').setRequired(true))
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
 
     new SlashCommandBuilder()
       .setName('ban')
@@ -341,8 +354,31 @@ client.once(Events.ClientReady, async () => {
 /* ---------- INTERACTION HANDLER ---------- */
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand() || !ALLOWED_SERVERS.includes(interaction.guildId)) return;
+  
   const { commandName, options } = interaction;
+  
+  // Deferimos la respuesta primero para evitar timeouts
   await interaction.deferReply({ ephemeral: true }).catch(() => null);
+
+  /* 🔥 VERIFICACIÓN DE ROLES 🔥 */
+  // Lista de comandos que requieren permisos especiales
+  const RESTRICTED_COMMANDS = [
+    'anuncio', 'nuevo', 'cambios', 
+    'ban', 'tempban', 'mute', 'unmute', 'unban'
+  ];
+
+  // Si el comando es restringido, verificamos los roles
+  if (RESTRICTED_COMMANDS.includes(commandName)) {
+    const memberRoles = interaction.member.roles.cache;
+    const hasPermission = memberRoles.some(role => ALLOWED_ROLES.includes(role.id));
+    
+    // Si no tiene el rol, le negamos el acceso
+    if (!hasPermission) {
+      return interaction.editReply({ 
+        content: `❌ **ACCESO DENEGADO**\nNo tienes el rol necesario para usar el comando \`/${commandName}\`.\nSolo Staff autorizado.` 
+      });
+    }
+  }
 
   try {
     // anuncio / nuevo / cambios
