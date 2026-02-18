@@ -48,8 +48,8 @@ const CONFIG = {
     LEAVE: '1340475418091847791',
     INVITES: '1341253763977056306' // ✅ NUEVO CANAL DE INVITES
   },
-  SERVER_IP: 'play.powerlucky.net',
-  STORE_URL: 'tienda.powerlucky.net'
+  SERVER_IP: 'powerlucky.hidenmc.com',
+  STORE_URL: 'https://powerlucky.tebex.io/'
 };
 
 /* ---------- EMOJIS ---------- */
@@ -712,3 +712,4 @@ client.login(CONFIG.TOKEN).catch(e => {
   console.error('Error login:', e);
   process.exit(1);
 });
+
