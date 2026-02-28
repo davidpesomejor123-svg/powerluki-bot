@@ -754,16 +754,16 @@ function postLoginInfo() {
   } catch (e) { console.error('postLoginInfo error:', e); }
 }
 
-// Login (NO imprimir el token)
+console.log('--- INTENTANDO LOGIN ---');
+
 client.login(CONFIG.TOKEN)
   .then(() => {
-    console.log('Login promise resolved');
-    // espera a ready (tu client.once ya hace lo principal), pero añadimos info extra a los 3s
+    console.log('✅ Login promise resolved');
+    // Info extra después de 3s
     setTimeout(postLoginInfo, 3000);
   })
-  .catch(e => {
-    console.error('Error login (catch):', e);
-    // Mantenemos el process.exit sólo si es un error fatal de login
+  .catch((err) => {
+    console.error('❌ Error en login:', err);
     process.exit(1);
   });
 
