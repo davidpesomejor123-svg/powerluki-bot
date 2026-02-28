@@ -70,6 +70,23 @@ const EMOJIS = {
   HARDCORE: '<:hardcore:1343056335599833139>',
   INVITE: '📩'
 };
+// DEBUG: trazas básicas (NO imprimen el token)
+console.log('--- DEBUG INICIO ---');
+console.log('PORT:', process.env.PORT || '(no PORT)');
+console.log('TOKEN_PRESENT:', !!process.env.TOKEN); // true si la var existe (no imprime el valor)
+process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
+process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
+client.on('error', (err) => console.error('Discord client error:', err));
+client.on('shardError', (err) => console.error('Shard error:', err));
+
+// Mejora el login para que muestre claramente lo que pasa
+if (!CONFIG.TOKEN) {
+  console.error('FATAL: No se encontró process.env.TOKEN — revisa ENV vars en Render (debe llamarse TOKEN).');
+  process.exit(1);
+}
+client.login(CONFIG.TOKEN)
+  .then(() => console.log('Login promise resolved — intentando esperar READY...'))
+  .catch(e => { console.error('Error login:', e); process.exit(1); });
 
 /* ---------- FILES & PERSISTENCE ---------- */
 const DB_DIR = path.resolve('./data');
@@ -712,5 +729,6 @@ client.login(CONFIG.TOKEN).catch(e => {
   console.error('Error login:', e);
   process.exit(1);
 });
+
 
 
