@@ -1,5 +1,9 @@
 // index.js — Power Lucky Network (Full Premium Fix)
+
 import 'dotenv/config';
+import dns from 'dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import express from 'express';
 import fs from 'fs/promises';
 import fsSync from 'fs';
@@ -16,7 +20,6 @@ import {
   PermissionsBitField,
   Collection
 } from 'discord.js';
-
 /* ---------- CONFIG ---------- */
 const SERVER_NAME = 'POWER LUCKY NETWORK';
 // IDs de los servidores donde funciona el bot
@@ -763,3 +766,4 @@ client.login(CONFIG.TOKEN)
     // Mantenemos el process.exit sólo si es un error fatal de login
     process.exit(1);
   });
+
