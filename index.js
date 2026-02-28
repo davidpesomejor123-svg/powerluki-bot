@@ -754,8 +754,29 @@ function postLoginInfo() {
   } catch (e) { console.error('postLoginInfo error:', e); }
 }
 
+// --- LOGIN + VALIDACIÓN DE TOKEN (DEBUG) ---
 console.log('--- INTENTANDO LOGIN ---');
 
+// Sanity: imprimir longitud y si contiene espacios/line breaks (no imprime token)
+if (!CONFIG.TOKEN) {
+  console.error('FATAL: CONFIG.TOKEN es vacío (process.env.TOKEN no encontrado).');
+} else {
+  console.log('TOKEN length:', CONFIG.TOKEN.length);
+  console.log('TOKEN contains whitespace:', /\s/.test(CONFIG.TOKEN));
+}
+
+// Validación rápida usando REST /users/@me (esto probará si el token es válido)
+const restCheck = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
+restCheck.get(Routes.user('@me'))
+  .then(u => {
+    console.log(`REST check OK — usuario del token: ${u.username}#${u.discriminator || u.id}`);
+  })
+  .catch(err => {
+    console.error('REST token validation failed (error al llamar /users/@me):', err?.message || err);
+    // Si la validación falla, es muy probable que el token sea inválido o tenga espacios.
+  });
+
+// Finalmente intentamos el login normal (mostramos promesa resuelta o error)
 client.login(CONFIG.TOKEN)
   .then(() => {
     console.log('✅ Login promise resolved');
@@ -766,4 +787,5 @@ client.login(CONFIG.TOKEN)
     console.error('❌ Error en login:', err);
     process.exit(1);
   });
+
 
