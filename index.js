@@ -70,23 +70,6 @@ const EMOJIS = {
   HARDCORE: '<:hardcore:1343056335599833139>',
   INVITE: '📩'
 };
-// DEBUG: trazas básicas (NO imprimen el token)
-console.log('--- DEBUG INICIO ---');
-console.log('PORT:', process.env.PORT || '(no PORT)');
-console.log('TOKEN_PRESENT:', !!process.env.TOKEN); // true si la var existe (no imprime el valor)
-process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
-process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
-client.on('error', (err) => console.error('Discord client error:', err));
-client.on('shardError', (err) => console.error('Shard error:', err));
-
-// Mejora el login para que muestre claramente lo que pasa
-if (!CONFIG.TOKEN) {
-  console.error('FATAL: No se encontró process.env.TOKEN — revisa ENV vars en Render (debe llamarse TOKEN).');
-  process.exit(1);
-}
-client.login(CONFIG.TOKEN)
-  .then(() => console.log('Login promise resolved — intentando esperar READY...'))
-  .catch(e => { console.error('Error login:', e); process.exit(1); });
 
 /* ---------- FILES & PERSISTENCE ---------- */
 const DB_DIR = path.resolve('./data');
@@ -260,10 +243,33 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildInvites // ✅ Necesario para sistema de invites
+    GatewayIntentBits.GuildInvites
   ],
   partials: [Partials.Channel]
 });
+
+/* ---------- DEBUG ---------- */
+console.log('--- DEBUG INICIO ---');
+console.log('PORT:', process.env.PORT || '(no PORT)');
+console.log('TOKEN_PRESENT:', !!process.env.TOKEN);
+
+process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
+process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
+
+client.on('error', (err) => console.error('Discord client error:', err));
+client.on('shardError', (err) => console.error('Shard error:', err));
+
+if (!process.env.TOKEN) {
+  console.error('FATAL: TOKEN no definido en Render');
+  process.exit(1);
+}
+
+client.login(process.env.TOKEN)
+  .then(() => console.log('Login promise resolved'))
+  .catch(e => {
+    console.error('Error login:', e);
+    process.exit(1);
+  });
 
 // Cache para Invites: Map<GuildID, Collection<InviteCode, Invite>>
 const invitesCache = new Map();
@@ -720,15 +726,40 @@ client.on('guildMemberRemove', async (m) => {
   } catch (e) { console.error('Error leave:', e); }
 });
 
-/* ---------- WEB & LOGIN ---------- */
+/* ---------- WEB & LOGIN (DEBUG MEJORADO) ---------- */
 const app = express();
 app.get('/', (_, res) => res.send(`${SERVER_NAME} Bot Online 🚀`));
 app.listen(process.env.PORT || 10000);
 
-client.login(CONFIG.TOKEN).catch(e => {
-  console.error('Error login:', e);
-  process.exit(1);
-});
+console.log('--- PRE-LOGIN CHECK ---');
+console.log('PORT:', process.env.PORT || '(no PORT)');
+console.log('CONFIG.TOKEN exists:', !!CONFIG.TOKEN);
+console.log('NODE VERSION:', process.version);
+console.log('ALLOWED_SERVERS:', ALLOWED_SERVERS.join(', '));
 
+process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
+process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
 
+client.on('error', (err) => console.error('Discord client error:', err));
+client.on('shardError', (err) => console.error('Shard error:', err));
 
+// Intentional small delay log after login success to dump some info
+function postLoginInfo() {
+  try {
+    console.log('client.user:', client.user ? `${client.user.tag} (${client.user.id})` : '(no client.user yet)');
+    console.log('Guilds cached:', client.guilds.cache.size);
+  } catch (e) { console.error('postLoginInfo error:', e); }
+}
+
+// Login (NO imprimir el token)
+client.login(CONFIG.TOKEN)
+  .then(() => {
+    console.log('Login promise resolved');
+    // espera a ready (tu client.once ya hace lo principal), pero añadimos info extra a los 3s
+    setTimeout(postLoginInfo, 3000);
+  })
+  .catch(e => {
+    console.error('Error login (catch):', e);
+    // Mantenemos el process.exit sólo si es un error fatal de login
+    process.exit(1);
+  });
