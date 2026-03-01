@@ -717,37 +717,26 @@ client.on('guildMemberRemove', async (m) => {
   } catch (e) { console.error('Error leave:', e); }
 });
 
-/* ---------- WEB SERVER & LOGIN ---------- */
-const app = express();
-app.get('/', (req, res) => res.send({ status: 'Online', bot: 'Power Luki' }));
-
-// 1. Arrancamos el servidor web PRIMERO (Esto hace que Render esté feliz)
-app.listen(process.env.PORT || 10000, () => {
-    console.log(`🌐 Servidor Web activo en puerto ${process.env.PORT || 10000}`);
-});
-
-// 2. Manejo de errores globales para que el bot no se apague por cualquier tontería
-process.on('unhandledRejection', error => console.error('Error no manejado:', error));
-// --- DEBUG ADICIONAL ANTES DE LOGIN ---
-console.log('--- INTENTANDO CONEXIÓN CON DISCORD ---');
-console.log('NODE:', process.version);
+/* ───────── 🔥 CONEXIÓN FINAL ───────── */
+console.log('--- 🚀 INICIANDO FASE DE LOGIN ---');
 console.log('TOKEN_PRESENT:', !!CONFIG.TOKEN);
 
-if (CONFIG.TOKEN) {
-  console.log('TOKEN_PREFIX:', CONFIG.TOKEN.startsWith('Bot ') ? '"Bot " (REMOVERLO)' : 'OK');
-  console.log('TOKEN_SAMPLE:', CONFIG.TOKEN.slice(0, 6) + '...' + CONFIG.TOKEN.slice(-6));
-} else {
-  console.warn('⚠️ TOKEN indefinido. Revisa tu .env');
+if (!CONFIG.TOKEN) {
+    console.error('❌ FATAL: No se encontró el TOKEN en las variables de entorno.');
+    process.exit(1);
 }
 
+// Login directo sin bloqueos de validación extra
 client.login(CONFIG.TOKEN)
-  .then(() => {
-    console.log('✅ ¡CONECTADO EXITOSAMENTE!');
-    console.log(`Bot conectado como: ${client.user.tag}`);
-  })
-  .catch(err => {
-    console.error('❌ ERROR COMPLETO AL CONECTAR:');
-    console.error(err);
-    if (err.code) console.error('Error code:', err.code);
-    if (err.message) console.error('Error message:', err.message);
-  });
+    .then(() => {
+        console.log('✨ [LOGIN] Promesa resuelta correctamente.');
+    })
+    .catch(err => {
+        console.error('❌ [LOGIN] Error al conectar con Discord:');
+        console.error(err.message);
+        
+        if (err.message.includes('An invalid token')) {
+            console.error('👉 EL TOKEN ES INVÁLIDO. Debes resetearlo en el Developer Portal.');
+        }
+        process.exit(1);
+    });
