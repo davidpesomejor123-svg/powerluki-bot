@@ -262,18 +262,6 @@ process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
 client.on('error', (err) => console.error('Discord client error:', err));
 client.on('shardError', (err) => console.error('Shard error:', err));
 
-if (!process.env.TOKEN) {
-  console.error('FATAL: TOKEN no definido en Render');
-  process.exit(1);
-}
-
-client.login(process.env.TOKEN)
-  .then(() => console.log('Login promise resolved'))
-  .catch(e => {
-    console.error('Error login:', e);
-    process.exit(1);
-  });
-
 // Cache para Invites: Map<GuildID, Collection<InviteCode, Invite>>
 const invitesCache = new Map();
 
@@ -787,5 +775,6 @@ client.login(CONFIG.TOKEN)
     console.error('❌ Error en login:', err);
     process.exit(1);
   });
+
 
 
