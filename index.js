@@ -251,6 +251,18 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
+/* ---------- INICIALIZACIÓN CRÍTICA ---------- */
+const app = express();
+const invitesCache = new Map(); // ✅ ARREGLADO: Definimos el cache de invitaciones
+
+// Esto responde a Render para que sepa que el bot está vivo
+app.get('/', (req, res) => res.send({ status: 'Online', bot: 'Power Lucky' }));
+
+app.listen(process.env.PORT || 10000, () => {
+    console.log('--- 🌐 SERVIDOR WEB ACTIVO ---');
+    console.log('Puerto detectado:', process.env.PORT || 10000);
+});
+
 /* ---------- TIMERS SCHEDULERS (BAN & MUTE) ---------- */
 const scheduledTasks = new Map();
 
@@ -705,25 +717,23 @@ client.on('guildMemberRemove', async (m) => {
 
 /* ───────── 🔥 CONEXIÓN FINAL ───────── */
 console.log('--- 🚀 INICIANDO FASE DE LOGIN ---');
-console.log('TOKEN_PRESENT:', !!CONFIG.TOKEN);
 
 if (!CONFIG.TOKEN) {
     console.error('❌ FATAL: No se encontró el TOKEN en las variables de entorno.');
     process.exit(1);
 }
 
-// Login directo sin bloqueos de validación extra
+// Conectamos sin validaciones REST pesadas para entrar rápido
 client.login(CONFIG.TOKEN)
     .then(() => {
-        console.log('✨ [LOGIN] Promesa resuelta correctamente.');
+        console.log('✨ [LOGIN] El bot ha entrado a Discord con éxito.');
     })
     .catch(err => {
-        console.error('❌ [LOGIN] Error al conectar con Discord:');
+        console.error('❌ [LOGIN] Error crítico al conectar:');
         console.error(err.message);
         
         if (err.message.includes('An invalid token')) {
-            console.error('👉 EL TOKEN ES INVÁLIDO. Debes resetearlo en el Developer Portal.');
+            console.error('👉 TU TOKEN YA NO SIRVE. Genera uno nuevo en el Developer Portal.');
         }
-        process.exit(1);
+        process.exit(1); 
     });
-
