@@ -717,64 +717,31 @@ client.on('guildMemberRemove', async (m) => {
   } catch (e) { console.error('Error leave:', e); }
 });
 
-/* ---------- WEB & LOGIN (DEBUG MEJORADO) ---------- */
+/* ---------- WEB & LOGIN ---------- */
 const app = express();
 app.get('/', (_, res) => res.send(`${SERVER_NAME} Bot Online 🚀`));
-app.listen(process.env.PORT || 10000);
+app.listen(process.env.PORT || 10000, () => {
+    console.log('🌐 Servidor Web en línea');
+});
 
-console.log('--- PRE-LOGIN CHECK ---');
-console.log('PORT:', process.env.PORT || '(no PORT)');
-console.log('CONFIG.TOKEN exists:', !!CONFIG.TOKEN);
-console.log('NODE VERSION:', process.version);
-console.log('ALLOWED_SERVERS:', ALLOWED_SERVERS.join(', '));
-
+// Deja los manejadores de errores para saber si algo explota
 process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
 process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
 
-client.on('error', (err) => console.error('Discord client error:', err));
-client.on('shardError', (err) => console.error('Shard error:', err));
-
-// Intentional small delay log after login success to dump some info
-function postLoginInfo() {
-  try {
-    console.log('client.user:', client.user ? `${client.user.tag} (${client.user.id})` : '(no client.user yet)');
-    console.log('Guilds cached:', client.guilds.cache.size);
-  } catch (e) { console.error('postLoginInfo error:', e); }
-}
-
-// --- LOGIN + VALIDACIÓN DE TOKEN (DEBUG) ---
 console.log('--- INTENTANDO LOGIN ---');
 
-// Sanity: imprimir longitud y si contiene espacios/line breaks (no imprime token)
 if (!CONFIG.TOKEN) {
-  console.error('FATAL: CONFIG.TOKEN es vacío (process.env.TOKEN no encontrado).');
-} else {
-  console.log('TOKEN length:', CONFIG.TOKEN.length);
-  console.log('TOKEN contains whitespace:', /\s/.test(CONFIG.TOKEN));
+    console.error('❌ ERROR: No hay TOKEN configurado.');
+    process.exit(1);
 }
 
-// Validación rápida usando REST /users/@me (esto probará si el token es válido)
-const restCheck = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
-restCheck.get(Routes.user('@me'))
-  .then(u => {
-    console.log(`REST check OK — usuario del token: ${u.username}#${u.discriminator || u.id}`);
-  })
-  .catch(err => {
-    console.error('REST token validation failed (error al llamar /users/@me):', err?.message || err);
-    // Si la validación falla, es muy probable que el token sea inválido o tenga espacios.
-  });
-
-// Finalmente intentamos el login normal (mostramos promesa resuelta o error)
+// LOGIN DIRECTO (Como en el sistema de tickets)
 client.login(CONFIG.TOKEN)
-  .then(() => {
-    console.log('✅ Login promise resolved');
-    // Info extra después de 3s
-    setTimeout(postLoginInfo, 3000);
-  })
-  .catch((err) => {
-    console.error('❌ Error en login:', err);
-    process.exit(1);
-  });
-
-
-
+    .then(() => {
+        console.log('✅ ¡Bot conectado exitosamente!');
+        setTimeout(postLoginInfo, 3000);
+    })
+    .catch((err) => {
+        console.error('❌ Error fatal al conectar:', err.message);
+        process.exit(1);
+    });
