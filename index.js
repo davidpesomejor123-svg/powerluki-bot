@@ -251,20 +251,6 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
-/* ---------- DEBUG ---------- */
-console.log('--- DEBUG INICIO ---');
-console.log('PORT:', process.env.PORT || '(no PORT)');
-console.log('TOKEN_PRESENT:', !!process.env.TOKEN);
-
-process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
-process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
-
-client.on('error', (err) => console.error('Discord client error:', err));
-client.on('shardError', (err) => console.error('Shard error:', err));
-
-// Cache para Invites: Map<GuildID, Collection<InviteCode, Invite>>
-const invitesCache = new Map();
-
 /* ---------- TIMERS SCHEDULERS (BAN & MUTE) ---------- */
 const scheduledTasks = new Map();
 
@@ -740,3 +726,4 @@ client.login(CONFIG.TOKEN)
         }
         process.exit(1);
     });
+
