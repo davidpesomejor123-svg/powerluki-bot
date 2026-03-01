@@ -717,31 +717,31 @@ client.on('guildMemberRemove', async (m) => {
   } catch (e) { console.error('Error leave:', e); }
 });
 
-/* ---------- WEB & LOGIN ---------- */
+/* ---------- WEB SERVER & LOGIN ---------- */
 const app = express();
-app.get('/', (_, res) => res.send(`${SERVER_NAME} Bot Online 🚀`));
+app.get('/', (req, res) => res.send({ status: 'Online', bot: 'Power Luki' }));
+
+// 1. Arrancamos el servidor web PRIMERO (Esto hace que Render esté feliz)
 app.listen(process.env.PORT || 10000, () => {
-    console.log('🌐 Servidor Web en línea');
+    console.log(`🌐 Servidor Web activo en puerto ${process.env.PORT || 10000}`);
 });
 
-// Deja los manejadores de errores para saber si algo explota
-process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
-process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
+// 2. Manejo de errores globales para que el bot no se apague por cualquier tontería
+process.on('unhandledRejection', error => console.error('Error no manejado:', error));
 
-console.log('--- INTENTANDO LOGIN ---');
+// 3. Login Directo (Sin validaciones REST que bloquean el proceso)
+console.log('--- INTENTANDO CONEXIÓN CON DISCORD ---');
 
-if (!CONFIG.TOKEN) {
-    console.error('❌ ERROR: No hay TOKEN configurado.');
-    process.exit(1);
-}
-
-// LOGIN DIRECTO (Como en el sistema de tickets)
 client.login(CONFIG.TOKEN)
     .then(() => {
-        console.log('✅ ¡Bot conectado exitosamente!');
-        setTimeout(postLoginInfo, 3000);
+        console.log('✅ ¡CONECTADO EXITOSAMENTE!');
+        console.log(`Bot: ${client.user.tag}`);
     })
-    .catch((err) => {
-        console.error('❌ Error fatal al conectar:', err.message);
-        process.exit(1);
+    .catch(err => {
+        console.error('❌ ERROR FATAL AL CONECTAR:');
+        console.error(err.message);
+        
+        if (err.message.includes('An invalid token')) {
+            console.error('👉 EL TOKEN ES INVÁLIDO. Recuerda que como lo mostraste en la captura, DEBES RESETEARLO en el Discord Developer Portal.');
+        }
     });
