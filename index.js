@@ -728,20 +728,26 @@ app.listen(process.env.PORT || 10000, () => {
 
 // 2. Manejo de errores globales para que el bot no se apague por cualquier tontería
 process.on('unhandledRejection', error => console.error('Error no manejado:', error));
-
-// 3. Login Directo (Sin validaciones REST que bloquean el proceso)
+// --- DEBUG ADICIONAL ANTES DE LOGIN ---
 console.log('--- INTENTANDO CONEXIÓN CON DISCORD ---');
+console.log('NODE:', process.version);
+console.log('TOKEN_PRESENT:', !!CONFIG.TOKEN);
+
+if (CONFIG.TOKEN) {
+  console.log('TOKEN_PREFIX:', CONFIG.TOKEN.startsWith('Bot ') ? '"Bot " (REMOVERLO)' : 'OK');
+  console.log('TOKEN_SAMPLE:', CONFIG.TOKEN.slice(0, 6) + '...' + CONFIG.TOKEN.slice(-6));
+} else {
+  console.warn('⚠️ TOKEN indefinido. Revisa tu .env');
+}
 
 client.login(CONFIG.TOKEN)
-    .then(() => {
-        console.log('✅ ¡CONECTADO EXITOSAMENTE!');
-        console.log(`Bot: ${client.user.tag}`);
-    })
-    .catch(err => {
-        console.error('❌ ERROR FATAL AL CONECTAR:');
-        console.error(err.message);
-        
-        if (err.message.includes('An invalid token')) {
-            console.error('👉 EL TOKEN ES INVÁLIDO. Recuerda que como lo mostraste en la captura, DEBES RESETEARLO en el Discord Developer Portal.');
-        }
-    });
+  .then(() => {
+    console.log('✅ ¡CONECTADO EXITOSAMENTE!');
+    console.log(`Bot conectado como: ${client.user.tag}`);
+  })
+  .catch(err => {
+    console.error('❌ ERROR COMPLETO AL CONECTAR:');
+    console.error(err);
+    if (err.code) console.error('Error code:', err.code);
+    if (err.message) console.error('Error message:', err.message);
+  });
