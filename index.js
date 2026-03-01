@@ -718,22 +718,42 @@ client.on('guildMemberRemove', async (m) => {
 /* ───────── 🔥 CONEXIÓN FINAL ───────── */
 console.log('--- 🚀 INICIANDO FASE DE LOGIN ---');
 
+/* ===== DEBUG TOKEN ===== */
+console.log('--- 🔎 DEBUG TOKEN ---');
+console.log('TOKEN definido?', !!CONFIG.TOKEN);
+
+if (CONFIG.TOKEN) {
+    const masked = `${CONFIG.TOKEN.slice(0, 4)}...${CONFIG.TOKEN.slice(-4)}`;
+    console.log('TOKEN (mascarado):', masked);
+} else {
+    console.log('⚠️ TOKEN está vacío o no existe en process.env');
+}
+
 if (!CONFIG.TOKEN) {
     console.error('❌ FATAL: No se encontró el TOKEN en las variables de entorno.');
+    console.error('👉 Ve a Render → Environment → agrega variable llamada TOKEN');
     process.exit(1);
 }
 
-// Conectamos sin validaciones REST pesadas para entrar rápido
+/* ===== LOGIN DISCORD ===== */
 client.login(CONFIG.TOKEN)
     .then(() => {
         console.log('✨ [LOGIN] El bot ha entrado a Discord con éxito.');
     })
     .catch(err => {
         console.error('❌ [LOGIN] Error crítico al conectar:');
-        console.error(err.message);
-        
-        if (err.message.includes('An invalid token')) {
-            console.error('👉 TU TOKEN YA NO SIRVE. Genera uno nuevo en el Developer Portal.');
+        console.error('Mensaje:', err.message);
+        console.error('Stack completo:\n', err.stack);
+
+        if ((err.message || '').includes('An invalid token')) {
+            console.error('🚨 TOKEN INVÁLIDO.');
+            console.error('👉 Genera uno nuevo en Discord Developer Portal → Bot → Reset Token');
         }
-        process.exit(1); 
+
+        if ((err.message || '').includes('Used disallowed intents')) {
+            console.error('🚨 INTENTS NO ACTIVADOS.');
+            console.error('👉 Activa Server Members Intent y Message Content Intent en el Portal.');
+        }
+
+        process.exit(1);
     });
