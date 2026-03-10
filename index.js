@@ -478,10 +478,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   try {
-    // anuncio / nuevo / cambios
+   // anuncio / nuevo / cambios
     if (['anuncio', 'nuevo', 'cambios'].includes(commandName)) {
       const raw = options.getString('mensaje', true);
-      const mensaje = raw.replace(/\s{2,}/g, '\n').trim();
+      
+      // ✨ CAMBIO AQUÍ: Reemplazamos \s{2,} por \\n
+      const mensaje = raw.replace(/\\n/g, '\n').trim(); 
+      
       const canalId = commandName === 'anuncio' ? CONFIG.CHANNELS.ANUNCIOS : (commandName === 'nuevo' ? CONFIG.CHANNELS.NUEVO : CONFIG.CHANNELS.CAMBIOS);
       const canal = await client.channels.fetch(canalId).catch(() => null);
       if (!canal || !canal.isTextBased()) return interaction.editReply('❌ Canal no encontrado.');
@@ -757,3 +760,4 @@ client.login(CONFIG.TOKEN)
 
         process.exit(1);
     });
+
