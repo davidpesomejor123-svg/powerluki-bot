@@ -337,7 +337,21 @@ function scheduleTask(type, guildId, userId, expiresAt) {
 /* ---------- READY ---------- */
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot conectado como ${client.user.tag}`);
-  client.user.setActivity(`${SERVER_NAME}`, { type: ActivityType.Playing });
+
+  // Configuración de estados rotativos con Emojis Estándar
+  const estados = [
+    { nombre: '🌐 IP: powerlucky.hidenmc.com', tipo: ActivityType.Playing },
+    { nombre: '🎮 Bedrock Port: 19132', tipo: ActivityType.Playing },
+    { nombre: '🔗 Tienda: powerlucky.tebex.io', tipo: ActivityType.Watching } // "Viendo Tienda..."
+  ];
+
+  let indice = 0;
+  
+  // Cambia el estado cada 15 segundos (15000 milisegundos)
+  setInterval(() => {
+    client.user.setActivity(estados[indice].nombre, { type: estados[indice].tipo });
+    indice = (indice + 1) % estados.length;
+  }, 15000);
 
   // 1. Cargar Invites
   for (const guildId of ALLOWED_SERVERS) {
