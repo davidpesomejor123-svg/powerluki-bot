@@ -5,9 +5,6 @@ import dns from 'dns';
 dns.setDefaultResultOrder('ipv4first');
 
 import express from 'express';
-import fs from 'fs/promises';
-import fsSync from 'fs';
-import path from 'path';
 import {
   Client,
   GatewayIntentBits,
@@ -20,6 +17,42 @@ import {
   PermissionsBitField,
   Collection
 } from 'discord.js';
+import fs from 'fs';
+
+// ===== ARCHIVOS =====
+const TEMPBANS_FILE = './banConfig.json';
+const MUTES_FILE = './mutes.json';
+const XP_FILE = './xp.json';
+
+// ===== FUNCIONES =====
+function loadData(file) {
+  try {
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveData(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+// ===== VARIABLES EN MEMORIA =====
+const tempBans = loadData(TEMPBANS_FILE);
+const activeMutes = loadData(MUTES_FILE);
+const xpData = loadData(XP_FILE);
+
+// Para controlar guardado de XP
+let xpNeedsSave = false;
+setInterval(() => {
+  if (xpNeedsSave) {
+    saveData(XP_FILE, xpData);
+    xpNeedsSave = false;
+    console.log('💾 XP guardado');
+  }
+}, 30000);
+
 /* ---------- CONFIG ---------- */
 const SERVER_NAME = 'POWER LUCKY NETWORK';
 // IDs de los servidores donde funciona el bot
@@ -74,35 +107,7 @@ const EMOJIS = {
   INVITE: '📩'
 };
 
-/* ---------- FILES & PERSISTENCE ---------- */
-const DB_DIR = path.resolve('./data');
-if (!fsSync.existsSync(DB_DIR)) fsSync.mkdirSync(DB_DIR);
 
-const TEMPBANS_FILE = path.join(DB_DIR, 'tempbans.json');
-const MUTES_FILE = path.join(DB_DIR, 'mutes.json'); // ✅ Nuevo archivo para Mutes
-const XP_FILE = path.join(DB_DIR, 'xp.json');
-
-let tempBans = {};
-let activeMutes = {}; // ✅ Cache de mutes
-let xpData = {};
-let xpNeedsSave = false;
-
-// Cargar datos
-try { if (fsSync.existsSync(TEMPBANS_FILE)) tempBans = JSON.parse(fsSync.readFileSync(TEMPBANS_FILE, 'utf8') || '{}'); } catch (e) { console.error('Error tempbans:', e); }
-try { if (fsSync.existsSync(MUTES_FILE)) activeMutes = JSON.parse(fsSync.readFileSync(MUTES_FILE, 'utf8') || '{}'); } catch (e) { console.error('Error mutes:', e); }
-try { if (fsSync.existsSync(XP_FILE)) xpData = JSON.parse(fsSync.readFileSync(XP_FILE, 'utf8') || '{}'); } catch (e) { console.error('Error xp:', e); }
-
-async function saveData(file, data) {
-  try { await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf8'); }
-  catch (e) { console.error(`Error guardando ${file}:`, e); }
-}
-
-setInterval(() => {
-  if (xpNeedsSave) {
-    saveData(XP_FILE, xpData);
-    xpNeedsSave = false;
-  }
-}, 30_000);
 
 /* ---------- UTIL ---------- */
 function parseDuration(str) {
@@ -574,25 +579,36 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // unmute
-    if (commandName === 'unmute') {
-      const target = options.getUser('usuario', true);
-      const member = await interaction.guild.members.fetch(target.id).catch(() => null);
-      if (!member) return interaction.editReply('❌ Miembro no encontrado.');
-      
-      await member.timeout(null, `Unmute manual por ${interaction.user.tag}`).catch(e => { throw e; });
-      
-      // Limpiar del sistema de persistencia
-      const key = `${interaction.guildId}|${target.id}`;
-      if (activeMutes[key]) {
-        delete activeMutes[key];
-        saveData(MUTES_FILE, activeMutes);
-        if (scheduledTasks.has(`mute|${key}`)) clearTimeout(scheduledTasks.get(`mute|${key}`));
-      }
+if (commandName === 'unmute') {
+  const target = options.getUser('usuario', true);
+  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+  if (!member) return interaction.editReply('❌ Miembro no encontrado.');
+  
+  await member.timeout(null, `Unmute manual por ${interaction.user.tag}`).catch(e => { throw e; });
+  
+  // Limpiar del sistema de persistencia
+  const key = `${interaction.guildId}|${target.id}`;
+  if (activeMutes[key]) {
+    delete activeMutes[key];
+    saveData(MUTES_FILE, activeMutes);
 
-      const ch = await client.channels.fetch(CONFIG.CHANNELS.UNMUTE).catch(() => null);
-      if (ch?.isTextBased()) await ch.send({ content: fillTemplate(TEMPLATES.UNMUTE, { 'mención_usuario': `<@${target.id}>`, 'moderador': `<@${interaction.user.id}>` }) }).catch(() => null);
-      return interaction.editReply(`🔊 <@${target.id}> desmuteado.`);
+    const taskKey = `mute|${interaction.guildId}|${target.id}`;
+    if (scheduledTasks.has(taskKey)) {
+      clearTimeout(scheduledTasks.get(taskKey));
+      scheduledTasks.delete(taskKey);
     }
+  }
+
+  const ch = await client.channels.fetch(CONFIG.CHANNELS.UNMUTE).catch(() => null);
+  if (ch?.isTextBased()) await ch.send({ 
+    content: fillTemplate(TEMPLATES.UNMUTE, { 
+      'mención_usuario': `<@${target.id}>`, 
+      'moderador': `<@${interaction.user.id}>` 
+    }) 
+  }).catch(() => null);
+
+  return interaction.editReply(`🔊 <@${target.id}> desmuteado.`);
+}
 
     // unban
     if (commandName === 'unban') {
