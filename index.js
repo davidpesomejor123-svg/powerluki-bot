@@ -92,7 +92,7 @@ const CONFIG = {
     LEAVE: '1340475418091847791',
     INVITES: '1341253763977056306' // ✅ NUEVO CANAL DE INVITES
   },
-  SERVER_IP: 'powerlucky.hidenmc.com',
+  SERVER_IP: 'powerlucky.hidenplay.net',
   STORE_URL: 'https://powerlucky.tebex.io/'
 };
 
